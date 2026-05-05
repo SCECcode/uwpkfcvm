@@ -20,7 +20,7 @@ void usage() {
 }
 
 #define KD_MAX_LINE 1000
-int uwpkfcvm_ucvm_debug=0;
+int uwpkfcvm_ucvm_debug=1;
 int uwpkfcvm_ucvm_debug_detail=0;
 FILE *stderrfp=NULL;
 int is_rigid=1;
@@ -96,58 +96,50 @@ int main(int argc, char **argv)
 	   r_idx++;
          }
       }
-fprintf(stderr,"COPY over %d v2pnts\n", r_idx);
 
       // in order
       int boundary_cnt= (2*NX) + (2*NY) - 4;
       v2pnts_boundary= malloc( boundary_cnt * sizeof(KDVec2));
       /** just boundary **/
       int b_idx=0;
-fprintf(stderr, "boundary_cnt %d \n", boundary_cnt);
+      if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"boundary_cnt %d\n",boundary_cnt); }
       // bottom row
-fprintf(stderr,"NX is %d\n", NX);
       for(int i=0; i<NX; i++) {
          int t=i;
          v2pnts_boundary[b_idx]= v2pnts[t];
-         fprintf(stderr,"1 adding..  v2pnts..%d\n", v2pnts[t].lldindex);
+         if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"1 add v2pnts_boundary %d\n",v2pnts[t].lldindex); }
          b_idx++;
       }
       // right from bottom up
-fprintf(stderr,"NY is %d\n", NY);
       for(int j=2; j<NY; j++) {  
          int t=(j * NX)-1;
 	 v2pnts_boundary[b_idx] =  v2pnts[t];
-         fprintf(stderr,"2 adding.. v2pnts..%d\n", v2pnts[t].lldindex);
+         if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"2 add v2pnts_boundary %d\n",v2pnts[t].lldindex); }
          b_idx++;
       }
       // top row in reverse
-fprintf(stderr,"NX is %d\n", NX);
       for(int i=1; i<NX; i++) { 
          int t= (NY * NX) - i;
 	 v2pnts_boundary[b_idx] =  v2pnts[t];
-         fprintf(stderr,"3 adding.. v2pnts..%d\n", v2pnts[t].lldindex);
+         if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"3 add v2pnts_boundary %d\n",v2pnts[t].lldindex); }
          b_idx++;
       }
       //
       // left from top down 
-fprintf(stderr,"NY is %d\n", NY);
       for(int i=1; i<NY; i++) { 
          int t= (NX * (NY - i));
 	 v2pnts_boundary[b_idx] =  v2pnts[t];
-         fprintf(stderr,"4 adding.. v2pnts..%d\n", v2pnts[t].lldindex);
+         if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"4 add v2pnts_boundary %d\n",v2pnts[t].lldindex); }
          b_idx++;
       }
 
-fprintf(stderr,"dump..v2pnts cnt (just layer zero) %d\n", r_idx);
+      if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"dump v2pnts  %d\n",r_idx); }
       dump_v2pnts(v2pnts, r_idx );
 
-fprintf(stderr,"retrieve just boundary. from layer zero %d\n", r_idx);
       for(int k=0; k< boundary_cnt; k++) { 
          find_latlon(pnts, v2pnts_boundary[k].lldindex);
       }
   }
-
-fprintf(stderr,"building kdtree..%d\n\n",numread);
 
   // kdtree for all the sorted grid points
   if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"==== kdtree with -- %d grid points and sorted v3pnts\n",numread); }

@@ -1,8 +1,8 @@
 # Autoconf/automake file
 
 # General compiler/linker flags
-AM_CFLAGS = ${CFLAGS} ${CPPFLAGS} ${PROJ_INCLUDES}
-AM_LDFLAGS = ${LDFLAGS} ${PROJ_LDFLAGS} ${LIBS} -lm
+AM_CFLAGS = ${CFLAGS} ${CPPFLAGS} ${PROJ_INCLUDES} ${PROJ_INCLUDES}
+AM_LDFLAGS = ${LDFLAGS} ${PROJ_LDFLAGS} ${LIBS} ${PROJ_LDFLAGS} -lm
 
 
 TARGETS = libuwpkfcvm.a libuwpkfcvm.so uwpkfcvm_query build_kdtree query_nearest_kdtree

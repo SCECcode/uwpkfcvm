@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include "proj.h"
+
 #define EARTH_RADIUS_M 6371000.0
 
 // reference lat/lon/depth/material properties
@@ -24,6 +26,7 @@ typedef struct KDlld {
 
 // base on KDlld 
 // vpnts == in approximate utm
+// in ECEF space
 typedef struct KDVec3 {
     double x;
     double y;
@@ -50,20 +53,13 @@ typedef struct {
 } KDNode3Disk;
 
 
-// this is for building triangle surface from tthree KDVec2 points
+// this is creating convex hull in 2D
+// using UTM 2D space
 typedef struct KDVec2 {
-    double x;
-    double y;
+    double utm_e;
+    double utm_n;
     int lldindex;
 } KDVec2;
-
-typedef struct KDTriangle {
-    KDVec2 *a;
-    KDVec2 *b;
-    KDVec2 *c;
-    KDVec2 *centroid;
-} KDTriangle;
-
 
 /** access **/ 
 void lld_to_xyz(KDVec3 *vp, double lat, double lon, double depth, int lldidx);
@@ -74,14 +70,18 @@ int flatten_v3kdtree(KDNode3 *node, KDNode3Disk *out, int *pos);
 void write_flatten_v3kdtree(const char *fname, KDNode3Disk *nodes, int n);
 KDNode3Disk *read_flatten_v3kdtree(const char *fname, int n);
 
-void xyz_to_xy(KDVec2 *vp, KDVec3 *vs);
+void lld_to_en(KDVec2 *vp, KDlld *lld, int lldindex, PJ *_geo2utm);
 void dump_v2pnts(KDVec2 *vp, int n);
+int create_boundary_hull(KDVec2 *pnts2, int n, KDVec2 **hull);
 
+int setup_to_utm(PJ **_geo2utm, int MODEL_ZONE);
+int to_utm(PJ *_geo2utm, double geo_lon, double geo_lat, double *utm_e, double *utm_n);
 
-void find_xyz_latlon(KDlld *pnts, int lldindex);
+void find_xyz_latlon(KDlld *pnts, int lldindex, int nX, int nY);
 void find_latlon(KDlld *pnts, int lldindex);
 
 /** usage **/
-double dist_sq(KDVec3* a, KDVec3* b);
 void kdtree_nearest(KDNode3 *node, KDVec3* query, KDVec3 **best, double *best_dist, int recursive);
 int nearest_point(KDVec3 *points, int n, KDVec3 *query);
+
+int point_in_convex(KDVec2 *poly, int n, KDVec2 p);

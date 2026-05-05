@@ -29,9 +29,6 @@ int NX=18;
 int NY=15;
 int NZ=9;
 
-double ORIGIN_LAT = 35.96;
-double ORIGIN_LON = -120.505; 
-
 PJ *_geo2utm = NULL;
 int MODEL_ZONE=10;
 

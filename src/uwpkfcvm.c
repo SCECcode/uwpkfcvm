@@ -107,32 +107,6 @@ int uwpkfcvm_init(const char *dir, const char *label) {
         return (UCVM_CODE_ERROR);
     }
 
-    // In order to simplify our calculations in the query, we want to rotate the box so that the bottom-left
-    // corner is at (0m,0m). Our box's height is total_height_m and total_width_m. We then rotate the
-    // point so that is is somewhere between (0,0) and (total_width_m, total_height_m). How far along
-    // the X and Y axis determines which grid points we use for the interpolation routine.
-
-    // Calculate the rotation angle of the box.
-    north_height_m = uwpkfcvm_configuration->top_left_corner_n - uwpkfcvm_configuration->bottom_left_corner_n;
-    east_width_m = uwpkfcvm_configuration->top_left_corner_e - uwpkfcvm_configuration->bottom_left_corner_e;
-
-    // Rotation angle. Cos, sin, and tan areexpensive computationally, so calculate once.
-    rotation_angle = atan(east_width_m / north_height_m);
-
-    uwpkfcvm_cos_rotation_angle = cos(rotation_angle);
-    uwpkfcvm_sin_rotation_angle = sin(rotation_angle);
-
-    uwpkfcvm_total_height_m = sqrt(pow(uwpkfcvm_configuration->top_left_corner_n - uwpkfcvm_configuration->bottom_left_corner_n, 2.0f) +
-          pow(uwpkfcvm_configuration->top_left_corner_e - uwpkfcvm_configuration->bottom_left_corner_e, 2.0f));
-    uwpkfcvm_total_width_m  = sqrt(pow(uwpkfcvm_configuration->top_right_corner_n - uwpkfcvm_configuration->top_left_corner_n, 2.0f) +
-          pow(uwpkfcvm_configuration->top_right_corner_e - uwpkfcvm_configuration->top_left_corner_e, 2.0f));
-
-    if(uwpkfcvm_ucvm_debug) {
-      fprintf(stderrfp,"north_height %lf east_width %lf\n", north_height_m, east_width_m);
-      fprintf(stderrfp,"totol height %lf total width %lf\n", uwpkfcvm_total_height_m, uwpkfcvm_total_width_m);
-      fprintf(stderrfp,"cos angle %lf sin angle %lf\n", uwpkfcvm_cos_rotation_angle, uwpkfcvm_sin_rotation_angle);
-    }
-
     // setup config_string 
     sprintf(uwpkfcvm_config_string,"config = %s\n",configbuf);
     uwpkfcvm_config_sz=1;

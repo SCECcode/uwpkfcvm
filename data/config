@@ -6,43 +6,54 @@ model_dir = uwpkfcvm
 model_data_path  = https://g-c662a6.a78b8.36fe.data.globus.org/ucvm/models
 
 # Number of cells in x, y, and z.
-nx = 33
-ny = 20
-nz = 15
+nx = 18
+ny = 15 
+nz = 9 
 
 # Depth, in meters
 # NOTE: 0 km is ~ sea level and 28 km depth is 28 km below sea level.
 depth = 28000
-depth_interval = 2000
+depths = { 0.0, 2.0, 4.0, 6.0, 9.0, 12.0, 16.0, 22.0, 28.0 }
 
-# Corners, in LATLON
-bottom_left_corner_lon = -120.57782
-bottom_left_corner_lat = 35.13359
-bottom_right_corner_lon = -119.49177
-bottom_right_corner_lat = 35.87510
-top_left_corner_lon = -121.39028
-top_left_corner_lat = 35.92063
-top_right_corner_lon = -120.30264
-top_right_corner_lat = 36.66214
+#center of the grid, 
+#origin_lat = 35.960
+#origin_lon = -120.505
+rotation_anticlockwise = -40.0
+
+# data file's mapping
+# traversing  from lower left -> lower right
+#             x-axis first and then y axis
+#lower left
+#-65.0 -70.0   0.0 35.10035 -120.55757  3.17
+#-120.55757 35.1003 0
+# lower right
+# 65.0 -70.0   0.0 35.85330 -119.45462  2.06
+#-119.45462 35.85330 0
+# upper left
+#-65.0  50.0   0.0 35.92865 -121.41274  3.36
+#-121.41274 35.92865 0
+# upper right
+# 65.0  50.0   0.0 36.68160 -120.30808  2.37
+#-120.30808 36.68160 0
 
 #data_in
-#0 -120.57782 35.13359
-#0 -119.49177 35.87510
-#0 -121.39028 35.92063
-#0 -120.30264 36.66214
+#0 -120.55757 35.1003
+#0 -119.45462 35.85330
+#0 -121.41274 35.92865
+#0 -120.30808 36.68160
 #>> latlon2utm 10 < data_in
-#lon(-120.577820)lat(35.133590) => utm_e(720787.201176),utm_n(3890350.364648)
-#lon(-119.491770)lat(35.875100) => utm_e(816842.162927),utm_n(3975589.689809)
-#lon(-121.390280)lat(35.920630) => utm_e(645328.879671),utm_n(3976147.143286)
-#lon(-120.302640)lat(36.662140) => utm_e(741178.557667),utm_n(4060589.124904)
-bottom_left_corner_e = 720787.20117
-bottom_left_corner_n = 3890350.364648
-bottom_right_corner_e = 816842.162927
-bottom_right_corner_n = 3975589.689809
-top_left_corner_e = 645328.879671
-top_left_corner_n = 3976147.143286
-top_right_corner_e = 741178.557667
-top_right_corner_n = 4060589.124904
+#lon(-120.557570)lat(35.100300) => utm_e(722723.265462),utm_n(3886702.632406)
+#lon(-119.454620)lat(35.853300) => utm_e(820285.443726),utm_n(3973291.620117)
+#lon(-121.412740)lat(35.928650) => utm_e(643287.898207),utm_n(3977003.574811)
+#lon(-120.308080)lat(36.681600) => utm_e(740631.667661),utm_n(4062734.743951)
+bottom_left_corner_e = 722723.265462
+bottom_left_corner_n = 3886702.632406
+bottom_right_corner_e = 820285.443726
+bottom_right_corner_n = 3973291.620117
+top_left_corner_e = 643287.898207
+top_left_corner_n = 3977003.574811
+top_right_corner_e = 740631.667661
+top_right_corner_n = 4062734.743951
 
 ## bilinear or trilinear interpolation
 interpolation = off

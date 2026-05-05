@@ -107,7 +107,6 @@ int uwpkfcvm_init(const char *dir, const char *label) {
         return (UCVM_CODE_ERROR);
     }
 
-
     // In order to simplify our calculations in the query, we want to rotate the box so that the bottom-left
     // corner is at (0m,0m). Our box's height is total_height_m and total_width_m. We then rotate the
     // point so that is is somewhere between (0,0) and (total_width_m, total_height_m). How far along
@@ -117,7 +116,7 @@ int uwpkfcvm_init(const char *dir, const char *label) {
     north_height_m = uwpkfcvm_configuration->top_left_corner_n - uwpkfcvm_configuration->bottom_left_corner_n;
     east_width_m = uwpkfcvm_configuration->top_left_corner_e - uwpkfcvm_configuration->bottom_left_corner_e;
 
-    // Rotation angle. Cos, sin, and tan are expensive computationally, so calculate once.
+    // Rotation angle. Cos, sin, and tan areexpensive computationally, so calculate once.
     rotation_angle = atan(east_width_m / north_height_m);
 
     uwpkfcvm_cos_rotation_angle = cos(rotation_angle);

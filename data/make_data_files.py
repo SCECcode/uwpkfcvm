@@ -3,14 +3,14 @@
 ##
 #  Builds the data files in the expected format from 
 #
-# from >>Latitude Longitude  X??    Y??    depth(KM)  Vp/Vs (km/s)
-# 
-#        35.13359 -120.57782 -64.0  -66.0  0.0        2.60
+# from >> XX??  YY?? depth(KM) Latitude Longitude  Vp/Vs (km/s)
+#         -65.0 -70.0   0.0    35.10035 -120.55757 3.17
 #
-# depth is in increment of 2000m,
+# with varying depth
 #
-# Z is depth below sea level. The model is uniformly gridded in X (4 km),
-# Y (6 km), and Z (2 km)
+## Origin and Rotate Angle(anticlockwise):35.960 -120.505 -40.00
+## create a combined vs/vp and no density file(to be calculated)
+
 
 import getopt
 import sys
@@ -25,7 +25,7 @@ if sys.version_info.major >= (3) :
 else:
   from urllib2 import urlopen
 
-## at UWPKFCVM/park.xy.latlon (vp) and park.xy.latlon.S (vs)
+## at UWPKFCVM/parkfield_vptable.txt and parkfield_vstable.txt
 
 model = "UWPKFCVM"
 
@@ -119,11 +119,6 @@ def main():
 
 #    print("\nDownloading model file\n")
 #
-#    fname="./"+"park.xy.latlon"
-#    url = path + "/" + fname
-#    download_urlfile2(url,fname)
-#    fname="./"+"park.xy.latlon.S"
-#    url = path + "/" + fname
 #    download_urlfile2(url,fname)
 
     subprocess.check_call(["mkdir", "-p", mdir])
@@ -131,111 +126,47 @@ def main():
     # Now we need to go through the data files and put them in the correct
     # format. More specifically, we need a vp.dat
 
-    fvp = open("./park.xy.latlon");
-    f_vp = open("./uwpkfcvm/vp.dat", "wb")
+    fvp = open("./parkfield_vptable.txt", "r")
+    fvs = open("./parkfield_vstable.txt", "r")
+    f_out = open("uwpkfcvm/parkfield.txt", "w")
 
-    vp_arr = array.array('f', (-1.0,) * (dimension_x * dimension_y * dimension_z))
+    data_total_cnt=0
+    vp_nan_cnt=0
+    vs_nan_cnt=0
 
-    print ("dimension is", (dimension_x * dimension_y * dimension_z))
+    for vpline, vsline in zip(fvp, fvs):
+        arr_vp = vpline.split()
+        arr_vs = vsline.split()
 
-    vp_nan_cnt = 0
-    vp_total_cnt =0;
+        skip_x = float(arr_vp[0])
+        skip_y = float(arr_vp[1])
+        in_z = float(arr_vp[2])
+        in_lat = float(arr_vp[3])
+        in_lon = float(arr_vp[4])
 
-    x_pos=0;
-    y_pos=0;
-    z_pos=0;
-
-    for line in fvp:
-        arr = line.split()
-
-        vp = -1.0
-        skip_lat = float(arr[0])
-        skip_lon = float(arr[1])
-        skip_x = float(arr[2])
-        skip_y = float(arr[3])
-        in_z = float(arr[4])
-        tmp = arr[5]
-
+        tmp = arr_vp[5]
         if( tmp != "NaN" ) :
-           vp = float(tmp)
-           vp = vp * 1000.0;
+           in_vp = float(tmp)
+           in_vp = in_vp * 1000.0;
         else:
            vp_nan_cnt = vp_nan_cnt + 1
 
-        vp_total_cnt = vp_total_cnt + 1
-
-        loc =z_pos * (dimension_y * dimension_x) + (y_pos * dimension_x) + x_pos
-        vp_arr[loc] = vp
-
-        x_pos = x_pos + 1
-        if(x_pos == dimension_x) :
-          x_pos = 0;
-          y_pos = y_pos+1
-          if(y_pos == dimension_y) :
-            y_pos=0;
-            z_pos = z_pos+1
-            if(z_pos == dimension_z) :
-              print ("All DONE")
-
-    vp_arr.tofile(f_vp)
-
-    fvp.close()
-    f_vp.close()
-    print("Done! with NaN(", vp_nan_cnt, ") total(", vp_total_cnt,")")
-
-
-    # Now the vs.dat
-    fvs = open("./park.xy.latlon.S");
-    f_vs = open("./uwpkfcvm/vs.dat", "wb")
-
-    vs_arr = array.array('f', (-1.0,) * (dimension_x * dimension_y * dimension_z))
-
-    print ("dimension is", (dimension_x * dimension_y * dimension_z))
-
-    vs_nan_cnt = 0
-    vs_total_cnt =0;
-
-    x_pos=0;
-    y_pos=0;
-    z_pos=0;
-
-    for line in fvs:
-        arr = line.split()
-
-        vs = -1.0
-        skip_lat = float(arr[0])
-        skip_lon = float(arr[1])
-        skip_x = float(arr[2])
-        skip_y = float(arr[3])
-        in_z = float(arr[4])
-        tmp = arr[5]
-
+        tmp = arr_vs[5]
         if( tmp != "NaN" ) :
-           vs = float(tmp)
-           vs = vs * 1000.0;
+           in_vs = float(tmp)
+           in_vs = in_vs * 1000.0;
         else:
            vs_nan_cnt = vs_nan_cnt + 1
 
-        vs_total_cnt = vs_total_cnt + 1
+        data_total_cnt = data_total_cnt + 1
 
-        loc =z_pos * (dimension_y * dimension_x) + (y_pos * dimension_x) + x_pos
-        vs_arr[loc] = vs
+#-123.267 39.3481 0 763.174 2087.571 1957.221
+        f_out.write("%lf %lf %lf %lf %lf\n" % (in_lon,in_lat,in_z,in_vs,in_vp))
 
-        x_pos = x_pos + 1
-        if(x_pos == dimension_x) :
-          x_pos = 0;
-          y_pos = y_pos+1
-          if(y_pos == dimension_y) :
-            y_pos=0;
-            z_pos = z_pos+1
-            if(z_pos == dimension_z) :
-              print ("All DONE")
-
-    vs_arr.tofile(f_vs)
-
+    fvp.close()
     fvs.close()
-    f_vs.close()
-    print("Done! with NaN(", vs_nan_cnt, ") total(", vs_total_cnt,")")
+    f_out.close()
+    print("Done! total data cnt = %d"%data_total_cnt)
 
 
 if __name__ == "__main__":

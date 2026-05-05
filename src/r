@@ -1,0 +1,5 @@
+##./build_kdtree 4 kdtree_surface.in kdtree_surface_flat.bin
+
+make
+
+./query_nearest_kdtree 2430 ../data/uwpkfcvm/parkfield.txt kdtree_query.in

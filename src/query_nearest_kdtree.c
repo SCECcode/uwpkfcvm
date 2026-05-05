@@ -93,7 +93,6 @@ int main(int argc, char **argv)
       for(int i=0; i< numread; i++) {
          if(pnts_zero_depth[i]) {
            xyz_to_xy(&v2pnts[r_idx],&v3pnts[i]);
-	   XX
 	   r_idx++;
          }
       }
@@ -101,7 +100,7 @@ fprintf(stderr,"COPY over %d v2pnts\n", r_idx);
 
       // in order
       int boundary_cnt= (2*NX) + (2*NY) - 4;
-      v2pnts_boundary= malloc( boundary_cnt * sizeof(KDVec2 *));
+      v2pnts_boundary= malloc( boundary_cnt * sizeof(KDVec2));
       /** just boundary **/
       int b_idx=0;
 fprintf(stderr, "boundary_cnt %d \n", boundary_cnt);

@@ -47,7 +47,7 @@ int main(int argc, char **argv)
   KDNode3 *v3nodes=NULL; // tree v3nodes for vec3
   int *pnts_zero_depth;  // track which v3pnts has z of 0
 		    
-  KDVec2 *v2pnts=NULL; // x,y
+  KDVec2 *v2pnts=NULL; // e,n
   KDVec2 *v2pnts_boundary=NULL; 
 
   int hull_size=0;

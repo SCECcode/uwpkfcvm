@@ -2,7 +2,7 @@
 
 # General compiler/linker flags
 AM_CFLAGS = ${CFLAGS} ${CPPFLAGS} ${PROJ_INCLUDES} ${PROJ_INCLUDES}
-AM_LDFLAGS = ${LDFLAGS} ${PROJ_LDFLAGS} ${LIBS} ${PROJ_LDFLAGS} -lm
+AM_LDFLAGS = ${LDFLAGS} ${PROJ_LDFLAGS} ${LIBS} ${PROJ_LDFLAGS} -lm 
 
 
 TARGETS = libuwpkfcvm.a libuwpkfcvm.so uwpkfcvm_query build_kdtree query_nearest_kdtree
@@ -14,18 +14,20 @@ install:
 	mkdir -p ${prefix}/lib
 	mkdir -p ${prefix}/include
 	cp libuwpkfcvm.so ${prefix}/lib
-	cp libuwpkfcvm.a ${prefix}/lib
 	cp uwpkfcvm.h ${prefix}/include
 	cp uwpkfcvm_query ${prefix}/bin
 
-libuwpkfcvm.a: uwpkfcvm_static.o 
+libuwpkfcvm.a: uwpkfcvm_static.o kdtree_util.o uwpkfcvm_util.o
 	$(AR) rcs $@ $^
 
-libuwpkfcvm.so: uwpkfcvm.o
+libuwpkfcvm.so: uwpkfcvm.o kdtree_util.o uwpkfcvm_util.o
 	$(CC) -shared $(AM_CFLAGS) -o libuwpkfcvm.so $^ $(AM_LDFLAGS)
 
 uwpkfcvm.o: uwpkfcvm.c
 	$(CC) -fPIC -DDYNAMIC_LIBRARY -o $@ -c $^ $(AM_CFLAGS)
+
+uwpkfcvm_static.o: uwpkfcvm.c
+	$(CC) -o $@ -c $^ $(AM_CFLAGS)
 	
 uwpkfcvm_static.o: uwpkfcvm.c
 	$(CC) -o $@ -c $^ $(AM_CFLAGS)
@@ -36,8 +38,11 @@ uwpkfcvm_query.o: uwpkfcvm_query.c
 uwpkfcvm_query : uwpkfcvm_query.o libuwpkfcvm.a
 	$(CC) -o $@ $^ $(AM_LDFLAGS) -lm
 
+uwpkfcvm_util.o: uwpkfcvm_util.c
+	$(CC) -fPIC $(AM_CFLAGS) -o $@ -c $^
+
 kdtree_util.o: kdtree_util.c
-	$(CC) $(AM_CFLAGS) -o $@ -c $^
+	$(CC) -fPIC $(AM_CFLAGS) -o $@ -c $^
 
 build_kdtree.o: build_kdtree.c
 	$(CC) $(AM_CFLAGS) -o $@ -c $^

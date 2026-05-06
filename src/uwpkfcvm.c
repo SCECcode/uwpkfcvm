@@ -13,8 +13,10 @@
 #include "limits.h"
 #include "ucvm_model_dtypes.h"
 #include "uwpkfcvm.h"
+
 #include <assert.h>
 
+int uwpkfcvm_ucvm_debug_detail=0;
 int uwpkfcvm_ucvm_debug=0;
 FILE *stderrfp=NULL;
 
@@ -34,7 +36,7 @@ char uwpkfcvm_data_directory[128];
 
 /** Configuration parameters. */
 uwpkfcvm_configuration_t *uwpkfcvm_configuration;
-/** Holds pointers to the velocity model data OR indicates it can be read from file. */
+/** Holds pointers to the velocity model data and its derived data */
 uwpkfcvm_model_t *uwpkfcvm_velocity_model;
 
 /** Proj coordinate transformation objects. can go from geo <-> utm */
@@ -88,7 +90,7 @@ int uwpkfcvm_init(const char *dir, const char *label) {
     sprintf(uwpkfcvm_data_directory, "%s/model/%s/data/%s/", dir, label, uwpkfcvm_configuration->model_dir);
 
     // Can we allocate the model, or parts of it, to memory. If so, we do.
-    tempVal = uwpkfcvm_try_reading_model(uwpkfcvm_velocity_model);
+    tempVal = uwpkfcvm_reading_model(uwpkfcvm_velocity_model);
 
     if (tempVal == SUCCESS) {
 //        fprintf(stderr, "WARNING: Could not load model into memory. Reading the model from the\n");
@@ -117,40 +119,6 @@ int uwpkfcvm_init(const char *dir, const char *label) {
 
     return SUCCESS;
 }
-
-static int to_utm(double lon, double lat, double *point_u, double *point_v) {
-    PJ_COORD xyzSrc = proj_coord(lat, lon, 0.0, HUGE_VAL);
-    PJ_COORD xyzDest = proj_trans(uwpkfcvm_geo2utm, PJ_FWD, xyzSrc);
-    int err = proj_context_errno(PJ_DEFAULT_CTX);
-    if (err) {
-       fprintf(stderr, "Error occurred while transforming latitude=%.4f, longitude=%.4f to UTM.\n",
-              lat, lon);
-        fprintf(stderr, "Proj error: %s\n", proj_context_errno_string(PJ_DEFAULT_CTX, err));
-        return UCVM_CODE_ERROR;
-    }
-    *point_u = xyzDest.xyzt.x;
-    *point_v = xyzDest.xyzt.y;
-    return err;
-}
-
-static int to_geo(double point_u, double point_v, double *lon, double *lat) {
-    PJ_COORD xyzSrc;
-    xyzSrc.xyzt.x=point_u;
-    xyzSrc.xyzt.y=point_v;
-    PJ_COORD xyzDest = proj_trans(uwpkfcvm_geo2utm, PJ_INV, xyzSrc);
-    
-    int err = proj_context_errno(PJ_DEFAULT_CTX);
-    if (err) {
-       fprintf(stderr, "Error occurred while transforming u=%.4f, v=%.4f to Geo.\n",
-              point_u, point_v);
-        fprintf(stderr, "Proj error: %s\n", proj_context_errno_string(PJ_DEFAULT_CTX, err));
-        return UCVM_CODE_ERROR;
-    }
-    *lon=xyzDest.lp.lam;
-    *lat=xyzDest.lp.phi;
-    return err;
-}
-
 
 /**
  * Queries uwpkfcvm at the given points and returns the data that it finds.
@@ -184,76 +152,15 @@ int uwpkfcvm_query(uwpkfcvm_point_t *points, uwpkfcvm_properties_t *data, int nu
             continue;
         }
 
-	// lon,lat,u,v			     
-	to_utm(points[i].longitude, points[i].latitude, &point_u, &point_v);
-
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   left_e %lf left_n %lf\n", 
-                      uwpkfcvm_configuration->bottom_left_corner_e, uwpkfcvm_configuration->bottom_left_corner_n); }
-
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   lon %lf lat %lf\n", points[i].longitude, points[i].latitude); }
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   point_u %lf point_v %lf\n", point_u, point_v); }
-
-        // Point within rectangle.
-        point_u -= uwpkfcvm_configuration->bottom_left_corner_e;
-        point_v -= uwpkfcvm_configuration->bottom_left_corner_n;
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"2  point_u %lf point_v %lf\n", point_u, point_v); }
-
-        // We need to rotate that point, the number of degrees we calculated above.
-        point_x = uwpkfcvm_cos_rotation_angle * point_u - uwpkfcvm_sin_rotation_angle * point_v;
-        point_y = uwpkfcvm_sin_rotation_angle * point_u + uwpkfcvm_cos_rotation_angle * point_v;
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   point_x %lf point_y  %lf\n", point_x, point_y); }
-
-        // Which point base point does that correspond to?
-        load_x_coord = round(point_x / uwpkfcvm_total_width_m * (uwpkfcvm_configuration->nx - 1));
-
-        load_y_coord = round(point_y / uwpkfcvm_total_height_m * (uwpkfcvm_configuration->ny - 1));
-
-        // And on the Z-axis? XXX
-	
-        load_z_coord = (uwpkfcvm_configuration->depth / uwpkfcvm_configuration->depth_interval) -
-                       round(points[i].depth / uwpkfcvm_configuration->depth_interval);
-
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   load_x_coord %d load_y_coord %d load_z_coord %d\n", load_x_coord,load_y_coord,load_z_coord); }
-
-        // Are we outside the model's X and Y boundaries?
-	// and also outside of z
-        if (load_x_coord > uwpkfcvm_configuration->nx - 1 || load_y_coord > uwpkfcvm_configuration->ny - 1 || load_x_coord < 0 || load_y_coord < 0 | load_z_coord < 0) {
-            data[i].vp = -1;
-            data[i].vs = -1;
-            data[i].rho = -1;
-            data[i].qp = -1;
-            data[i].qs = -1;
+	// is it in model ??
+        if( ! in_model(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth) ) {
             continue;
+            } else { 
+	    // query for nearest data point
+                int modelindex=nearest_neighbor(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth);
+                //if(uwpkfcvm_configuration->interpolation) { // do nothing for now }
+                uwpkfcvm_read_properties(uwpkfcvm_velocity_model, modelindex, &(data[i]));    
         }
-
-        if(uwpkfcvm_configuration->interpolation) {
-
-          // Get the X, Y, and Z percentages for the bilinear or trilinear interpolation below.
-          double x_interval=(uwpkfcvm_configuration->nx > 1) ?
-                     uwpkfcvm_total_width_m / (uwpkfcvm_configuration->nx-1):uwpkfcvm_total_width_m;
-          double y_interval=(uwpkfcvm_configuration->ny > 1) ?
-                     uwpkfcvm_total_height_m / (uwpkfcvm_configuration->ny-1):uwpkfcvm_total_height_m;
-
-          x_percent = fmod(point_u, x_interval) / x_interval;
-          y_percent = fmod(point_v, y_interval) / y_interval;
-          z_percent = fmod(points[i].depth, uwpkfcvm_configuration->depth_interval) / uwpkfcvm_configuration->depth_interval;
-
-          // Read all the surrounding point properties.
-          uwpkfcvm_read_properties(load_x_coord, load_y_coord, load_z_coord, &(surrounding_points[0]));    // Orgin.
-          uwpkfcvm_read_properties(load_x_coord + 1, load_y_coord, load_z_coord, &(surrounding_points[1]));    // Orgin + 1x
-          uwpkfcvm_read_properties(load_x_coord, load_y_coord + 1, load_z_coord, &(surrounding_points[2]));    // Orgin + 1y
-          uwpkfcvm_read_properties(load_x_coord + 1, load_y_coord + 1, load_z_coord, &(surrounding_points[3]));    // Orgin + x + y, forms top plane.
-          uwpkfcvm_read_properties(load_x_coord, load_y_coord, load_z_coord - 1, &(surrounding_points[4]));    // Bottom plane origin
-          uwpkfcvm_read_properties(load_x_coord + 1, load_y_coord, load_z_coord - 1, &(surrounding_points[5]));    // +1x
-          uwpkfcvm_read_properties(load_x_coord, load_y_coord + 1, load_z_coord - 1, &(surrounding_points[6]));    // +1y
-          uwpkfcvm_read_properties(load_x_coord + 1, load_y_coord + 1, load_z_coord - 1, &(surrounding_points[7]));    // +x +y, forms bottom plane.
-  
-          uwpkfcvm_trilinear_interpolation(x_percent, y_percent, z_percent, surrounding_points, &(data[i]));
-          } else {
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp,"direct call, no interpolation\n"); }
-              uwpkfcvm_read_properties(load_x_coord, load_y_coord, load_z_coord, &(data[i]));    // Orgin.
-        }
-
     }
 
     return SUCCESS;
@@ -311,150 +218,14 @@ double uwpkfcvm_calculate_density(double vp) {
      return retVal;
 }
 
-/**
- * Retrieves the material properties (whatever is available) for the given data point, expressed
- * in x, y, and z co-ordinates.
- *
- * @param x The x coordinate of the data point.
- * @param y The y coordinate of the data point.
- * @param z The z coordinate of the data point.
- * @param data The properties struct to which the material properties will be written.
- */
-void uwpkfcvm_read_properties(int x, int y, int z, uwpkfcvm_properties_t *data) {
-    // Set everything to -1 to indicate not found.
-    data->vp = -1;
-    data->vs = -1;
-    data->rho = -1;
-    data->qp = -1;
-    data->qs = -1;
+void uwpkfcvm_read_properties(uwpkfcvm_model_t *model, int location, uwpkfcvm_properties_t *data) {  
 
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp,"read_properties index: x(%d) y(%d) z(%d)",x,y,z); }
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp," from (%d:%d:%d)\n",
-	          uwpkfcvm_configuration->nx,uwpkfcvm_configuration->ny,uwpkfcvm_configuration->nz); }
-    float *ptr = NULL;
-    FILE *fp = NULL;
-    long location = 0;
+    double vs=vs_by_location(model,location);
 
-
-    // the z is inverted at line #145
-    if ( strcmp(uwpkfcvm_configuration->seek_axis, "fast-y") == 0 ||
-                 strcmp(uwpkfcvm_configuration->seek_axis, "fast-Y") == 0 ) { // fast-y,  uwpkfcvm 
-        if(strcmp(uwpkfcvm_configuration->seek_direction, "bottom-up") == 0) { 
-            location = ((long) z * uwpkfcvm_configuration->nx * uwpkfcvm_configuration->ny) + (x * uwpkfcvm_configuration->ny) + y;
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp," >>> LOCATION==%ld(fast-y, bottom-up)\n", location); }
-            } else { // nz starts from 0 up to nz-1
-                location = ((long)((uwpkfcvm_configuration->nz -1) - z) * uwpkfcvm_configuration->nx * uwpkfcvm_configuration->ny) + (x * uwpkfcvm_configuration->ny) + y;
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp," >>> LOCATION==%ld(fast-y, top-down)\n", location); }
-        }
-    } else {  // fast-X,  data
-        if ( strcmp(uwpkfcvm_configuration->seek_axis, "fast-x") == 0 ||
-                     strcmp(uwpkfcvm_configuration->seek_axis, "fast-X") == 0 ) { // fast-x,  uwpkfcvm 
-            if(strcmp(uwpkfcvm_configuration->seek_direction, "bottom-up") == 0) { 
-               location = ((long)z * uwpkfcvm_configuration->nx * uwpkfcvm_configuration->ny) + (y * uwpkfcvm_configuration->nx) + x;
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp," >>> LOCATION==%ld(fast-x, bottom-up)\n", location); }
-                } else { // bottom-up
-                    location = ((long)((uwpkfcvm_configuration->nz -1)- z) * uwpkfcvm_configuration->nx * uwpkfcvm_configuration->ny) + (y * uwpkfcvm_configuration->nx) + x;
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp," >>> LOCATION==%ld(fast-x, top-down)\n", location); }
-            }
-        }
-    }
-
-    // Check our loaded components of the model.
-    if (uwpkfcvm_velocity_model->vp_status == 2) {
-        // Read from memory.
-        ptr = (float *)uwpkfcvm_velocity_model->vp;
-        data->vp = ptr[location];
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp,"     FOUND : vp %f\n", data->vp); }
-    } else if (uwpkfcvm_velocity_model->vp_status == 1) {
-        // Read from file.
-        fp = (FILE *)uwpkfcvm_velocity_model->vp;
-        fseek(fp, location * sizeof(float), SEEK_SET);
-        float temp;
-        fread(&(temp), sizeof(float), 1, fp);
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp,"     FOUND : vp %f\n", temp); }
-        data->vp=temp;
-    }
-    if (uwpkfcvm_velocity_model->vs_status == 2) {
-        // Read from memory.
-        ptr = (float *)uwpkfcvm_velocity_model->vs;
-        data->vs = ptr[location];
-
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp,"     FOUND : vs %f\n", data->vs); }
-
-    } else if (uwpkfcvm_velocity_model->vs_status == 1) {
-        // Read from file.
-        fp = (FILE *)uwpkfcvm_velocity_model->vs;
-        fseek(fp, location * sizeof(float), SEEK_SET);
-        float temp;
-        fread(&(temp), sizeof(float), 1, fp);
-if(uwpkfcvm_ucvm_debug) {fprintf(stderrfp,"     FOUND : vs %f\n", temp); }
-        data->vs=temp;
-    }
-
+    data->vs = vs;
+    data->vp=vp_by_location(model,location);
     /* Calculate density */
     if (data->vp > 0.0) { data->rho=uwpkfcvm_calculate_density(data->vp); }
-}
-
-/**
- * Trilinearly interpolates given a x percentage, y percentage, z percentage and a cube of
- * data properties in top origin format (top plane first, bottom plane second).
- *
- * @param x_percent X percentage
- * @param y_percent Y percentage
- * @param z_percent Z percentage
- * @param eight_points Eight surrounding data properties
- * @param ret_properties Returned data properties
- */
-void uwpkfcvm_trilinear_interpolation(double x_percent, double y_percent, double z_percent,
-                             uwpkfcvm_properties_t *eight_points, uwpkfcvm_properties_t *ret_properties) {
-    uwpkfcvm_properties_t *temp_array = calloc(2, sizeof(uwpkfcvm_properties_t));
-    uwpkfcvm_properties_t *four_points = eight_points;
-
-    uwpkfcvm_bilinear_interpolation(x_percent, y_percent, four_points, &temp_array[0]);
-
-    // Now advance the pointer four "cvms5_properties_t" spaces.
-    four_points += 4;
-
-    // Another interpolation.
-    uwpkfcvm_bilinear_interpolation(x_percent, y_percent, four_points, &temp_array[1]);
-
-    // Now linearly interpolate between the two.
-    uwpkfcvm_linear_interpolation(z_percent, &temp_array[0], &temp_array[1], ret_properties);
-
-    free(temp_array);
-}
-
-/**
- * Bilinearly interpolates given a x percentage, y percentage, and a plane of data properties in
- * origin, bottom-right, top-left, top-right format.
- *
- * @param x_percent X percentage.
- * @param y_percent Y percentage.
- * @param four_points Data property plane.
- * @param ret_properties Returned data properties.
- */
-void uwpkfcvm_bilinear_interpolation(double x_percent, double y_percent, uwpkfcvm_properties_t *four_points, uwpkfcvm_properties_t *ret_properties) {
-    uwpkfcvm_properties_t *temp_array = calloc(2, sizeof(uwpkfcvm_properties_t));
-    uwpkfcvm_linear_interpolation(x_percent, &four_points[0], &four_points[1], &temp_array[0]);
-    uwpkfcvm_linear_interpolation(x_percent, &four_points[2], &four_points[3], &temp_array[1]);
-    uwpkfcvm_linear_interpolation(y_percent, &temp_array[0], &temp_array[1], ret_properties);
-    free(temp_array);
-}
-
-/**
- * Linearly interpolates given a percentage from x0 to x1, a data point at x0, and a data point at x1.
- *
- * @param percent Percent of the way from x0 to x1 (from 0 to 1 interval).
- * @param x0 Data point at x0.
- * @param x1 Data point at x1.
- * @param ret_properties Resulting data properties.
- */
-void uwpkfcvm_linear_interpolation(double percent, uwpkfcvm_properties_t *x0, uwpkfcvm_properties_t *x1, uwpkfcvm_properties_t *ret_properties) {
-    ret_properties->vp  = (1 - percent) * x0->vp  + percent * x1->vp;
-    ret_properties->vs  = (1 - percent) * x0->vs  + percent * x1->vs;
-    ret_properties->rho = (1 - percent) * x0->rho + percent * x1->rho;
-    ret_properties->qp  = (1 - percent) * x0->qp  + percent * x1->qp;
-    ret_properties->qs  = (1 - percent) * x0->qs  + percent * x1->qs;
 }
 
 /**
@@ -474,7 +245,10 @@ int uwpkfcvm_finalize() {
     proj_destroy(uwpkfcvm_geo2utm);
     uwpkfcvm_geo2utm = NULL;
 
-    if (uwpkfcvm_velocity_model) free(uwpkfcvm_velocity_model);
+    if (uwpkfcvm_velocity_model) {
+      free_model(uwpkfcvm_velocity_model);
+      free(uwpkfcvm_velocity_model);
+    }
     if (uwpkfcvm_configuration) free(uwpkfcvm_configuration);
 
     return SUCCESS;
@@ -622,67 +396,25 @@ static int too_big() {
  * Tries to read the model into memory.
  *
  * @param model The model parameter struct which will hold the pointers to the data either on disk or in memory.
- * @return 2 if all files are read to memory, SUCCESS if file is found but at least 1
+ * @return 0 fail, SUCCESS if processed okay, 1
  * is not in memory, FAIL if no file found.
  */
-int uwpkfcvm_try_reading_model(uwpkfcvm_model_t *model) {
-    double base_malloc = uwpkfcvm_configuration->nx * uwpkfcvm_configuration->ny * uwpkfcvm_configuration->nz * sizeof(float);
+int uwpkfcvm_reading_model(uwpkfcvm_model_t *model) {
+	
     int file_count = 0;
-    int all_read_to_memory =0;
     char current_file[128];
     FILE *fp;
 
     // Let's see what data we actually have.
-    sprintf(current_file, "%s/vp.dat", uwpkfcvm_data_directory);
+    sprintf(current_file, "%s/parkfield.txt", uwpkfcvm_data_directory);
     if (access(current_file, R_OK) == 0) {
-        if( !too_big() ) { // only if fit
-            model->vp = (float *)malloc(base_malloc);
-            if (model->vp != NULL) {
-            // Read the model in.
-            fp = fopen(current_file, "rb");
-            fread(model->vp, 1, base_malloc, fp);
-                        all_read_to_memory++;
-            fclose(fp);
-            model->vp_status = 2;
-            } else {
-              model->vp = fopen(current_file, "rb");
-              model->vp_status = 1;
-            }
-        } else {
-            model->vp = fopen(current_file, "rb");
-            model->vp_status = 1;
-        }
-        file_count++;
+       fp = fopen(current_file, "rb");
+       load_model(model, uwpkfcvm_configuration->nx,
+		       uwpkfcvm_configuration->ny, uwpkfcvm_configuration->nz, fp);
+       fclose(fp);
+       return 1;
     }
-
-    sprintf(current_file, "%s/vs.dat", uwpkfcvm_data_directory);
-    if (access(current_file, R_OK) == 0) {
-                if( !too_big() ) { // only if fit
-            model->vs = (float *) malloc(base_malloc);
-        if (model->vs != NULL) {
-            // Read the model in.
-            fp = fopen(current_file, "rb");
-            fread(model->vs, 1, base_malloc, fp);
-                        all_read_to_memory++;
-            fclose(fp);
-            model->vs_status = 2;
-            } else {
-              model->vs = fopen(current_file, "rb");
-              model->vs_status = 1;
-            }
-        } else {
-            model->vs = fopen(current_file, "rb");
-            model->vs_status = 1;
-                }
-        file_count++;
-    }
-
-    if (file_count == 0)
-        return FAIL;
-    else if (file_count > 0 && all_read_to_memory != file_count)
-        return SUCCESS;
-    else
-        return 2;
+    return 0;
 }
 
 // The following functions are for dynamic library mode. If we are compiling

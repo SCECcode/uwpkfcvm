@@ -7,6 +7,8 @@
  * base on original uwpkfcvm
  *
  */
+#ifndef UWPKFCVM_H
+#define UWPKFCVM_H
 
 // Includes
 #include <stdio.h>
@@ -15,6 +17,7 @@
 #include <unistd.h>
 #include <math.h>
 
+#include "kdtree_util.h"
 #include "proj.h"
 
 // Constants
@@ -99,26 +102,22 @@ typedef struct uwpkfcvm_configuration_t {
 
 /** The model structure which points to available portions of the model. */
 typedef struct uwpkfcvm_model_t {
-	/** A pointer to the Vs data either in memory or disk. Null if does not exist. */
-	void *vs;
-	/** Vs status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int vs_status;
-	/** A pointer to the Vp data either in memory or disk. Null if does not exist. */
-	void *vp;
-	/** Vp status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int vp_status;
-	/** A pointer to the rho data either in memory or disk. Null if does not exist. */
-	void *rho;
-	/** Rho status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int rho_status;
-	/** A pointer to the Qp data either in memory or disk. Null if does not exist. */
-	void *qp;
-	/** Qp status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int qp_status;
-	/** A pointer to the Qs data either in memory or disk. Null if does not exist. */
-	void *qs;
-	/** Qs status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int qs_status;
+	KDlld *pnts;       // raw model data
+	int *pnts_zero_depth; // track which pnts has depth/z = 0
+			      
+        KDVec3 *v3pnts;    // x,y,z
+        KDNode3 *v3nodes;  // tree v3nodes for vec3
+
+        KDVec2 *v2pnts; // utm_e, utm_n, just 1 layer 
+        KDVec2 *v2pnts_boundary;
+        int boundary_size;
+
+        KDVec2 *v2hull;
+
+	int v2hull_size;
+        int zero_depth_cnt; // should be NX * NY			
+
+
 } uwpkfcvm_model_t;
 
 // UCVM API Required Functions
@@ -162,9 +161,10 @@ int uwpkfcvm_dump_configuration(uwpkfcvm_configuration_t *config);
 /** Prints out the error string. */
 void uwpkfcvm_print_error(char *err);
 /** Retrieves the value at a specified grid point in the model. */
-void uwpkfcvm_read_properties(int x, int y, int z, uwpkfcvm_properties_t *data);
+void uwpkfcvm_read_properties2(int x, int y, int z, uwpkfcvm_properties_t *data);
+void uwpkfcvm_read_properties(uwpkfcvm_model_t *model, int index, uwpkfcvm_properties_t *data);
 /** Attempts to malloc the model size in memory and read it in. */
-int uwpkfcvm_try_reading_model(uwpkfcvm_model_t *model);
+int uwpkfcvm_reading_model(uwpkfcvm_model_t *model);
 
 // Interpolation Functions
 /** Linearly interpolates two uwpkfcvm_properties_t structures */
@@ -174,3 +174,14 @@ void uwpkfcvm_bilinear_interpolation(double x_percent, double y_percent, uwpkfcv
 /** Trilinearly interpolates the properties. */
 void uwpkfcvm_trilinear_interpolation(double x_percent, double y_percent, double z_percent, uwpkfcvm_properties_t *eight_points,
 							 uwpkfcvm_properties_t *ret_properties);
+
+// from uwpkfcvm_util.c
+void setup_model(uwpkfcvm_model_t *model, int cnt);
+void free_model(uwpkfcvm_model_t *model);
+int load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp);
+int in_model(uwpkfcvm_model_t *model, double lat, double lon, double depth);
+int nearest_neighbor(uwpkfcvm_model_t *model, double lat, double lon, double depth);
+double vs_by_location(uwpkfcvm_model_t *model,int loc);
+double vp_by_location(uwpkfcvm_model_t *model,int loc);
+
+#endif // UWPKFCVM_H

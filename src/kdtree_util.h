@@ -5,6 +5,10 @@
 
 **/
 
+#ifndef KDTREE_UTIL_H
+#define KDTREE_UTIL_H
+
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -12,6 +16,10 @@
 #include "proj.h"
 
 #define EARTH_RADIUS_M 6371000.0
+
+extern int uwpkfcvm_ucvm_debug;
+extern int uwpkfcvm_ucvm_debug_detail;
+extern FILE *stderrfp;
 
 // reference lat/lon/depth/material properties
 // for 'background expansion'
@@ -76,6 +84,7 @@ int create_boundary_hull(KDVec2 *pnts2, int n, KDVec2 **hull);
 
 int setup_to_utm(PJ **_geo2utm, int MODEL_ZONE);
 int to_utm(PJ *_geo2utm, double geo_lon, double geo_lat, double *utm_e, double *utm_n);
+int to_geo(PJ *_geo2utm, double point_u, double point_v, double *lon, double *lat);
 
 void find_xyz_latlon(KDlld *pnts, int lldindex, int nX, int nY);
 void find_latlon(KDlld *pnts, int lldindex);
@@ -85,3 +94,7 @@ void kdtree_nearest(KDNode3 *node, KDVec3* query, KDVec3 **best, double *best_di
 int nearest_point(KDVec3 *points, int n, KDVec3 *query);
 
 int point_in_convex(KDVec2 *poly, int n, KDVec2 p);
+
+#endif // UWPKFCVM_H
+
+

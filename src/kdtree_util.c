@@ -1,15 +1,11 @@
 /** 
   
-  kdtree_util.c.c
+  kdtree_util.c
 
 **/
 
 #include <math.h>
 #include "kdtree_util.h"
-
-extern int uwpkfcvm_ucvm_debug;
-extern int uwpkfcvm_ucvm_debug_detail;
-extern FILE *stderrfp;
 
 // to ECEF global space -- global 3D Cartesian space
 void lld_to_xyz(KDVec3 *p, double lat, double lon, double depth, int lldidx)
@@ -236,6 +232,25 @@ int to_utm(PJ *_geo2utm, double geo_lon, double geo_lat, double *utm_e, double *
   *utm_n = xyzDest.xyzt.y;
   return err;
 }
+
+int to_geo(PJ *_geo2utm, double point_u, double point_v, double *lon, double *lat) {
+    PJ_COORD xyzSrc;
+    xyzSrc.xyzt.x=point_u;
+    xyzSrc.xyzt.y=point_v;
+    PJ_COORD xyzDest = proj_trans(_geo2utm, PJ_INV, xyzSrc);
+
+    int err = proj_context_errno(PJ_DEFAULT_CTX);
+    if (err) {
+       fprintf(stderr, "Error occurred while transforming u=%.4f, v=%.4f to Geo.\n",
+              point_u, point_v);
+        fprintf(stderr, "Proj error: %s\n", proj_context_errno_string(PJ_DEFAULT_CTX, err));
+        return PJ_LOG_ERROR;
+    }
+    *lon=xyzDest.lp.lam;
+    *lat=xyzDest.lp.phi;
+    return err;
+}
+
 
 /*
  * Convert lld to ENU 

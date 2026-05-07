@@ -350,6 +350,10 @@ int uwpkfcvm_read_configuration(char *file, uwpkfcvm_configuration_t *config) {
                 config->interpolation=0;
                 if (strcmp(value,"on") == 0) config->interpolation=1;
             }
+            if (strcmp(key, "1d_background") == 0) { 
+                config->id_background=0;
+                if (strcmp(value,"on") == 0) config->id_background=1;
+            }
         }
     }
 

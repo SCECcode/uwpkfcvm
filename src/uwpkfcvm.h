@@ -90,14 +90,14 @@ typedef struct uwpkfcvm_configuration_t {
 	double bottom_right_corner_e;
 	/** Bottom right corner northing in UTM projection */
 	double bottom_right_corner_n;
-	/** Z interval for the data */
-	double depth_interval;
         /** The data access seek method, fast-X, or fast-Y */
         char seek_axis[128];
         /** The data seek direction, bottom-up, or top-down */
         char seek_direction[128];
         /** trilinear interploation; */
         int interpolation;
+        /** add 1d model using nearest boundary points */
+        int 1d_background;
 } uwpkfcvm_configuration_t;
 
 /** The model structure which points to available portions of the model. */

@@ -38,7 +38,7 @@ void free_model(uwpkfcvm_model_t *model) {
     free(model->pnts_zero_depth);
 }
 
-int load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp) {
+void load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp) {
     int numread=0;
     char line[KD_MAX_LINE];
     int sz=NX * NY * NZ;
@@ -133,15 +133,16 @@ int load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp) {
 			   model->v2pnts_boundary[k].utm_e, model->v2pnts_boundary[k].utm_n);
 	}
       }
- 
-      model->v2hull_size=create_boundary_hull(model->v2pnts_boundary, boundary_cnt, &model->v2hull);
-      if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp, "Convex Hull (%d points)\n", model->v2hull_size); }
-    }
+    } 
+
+    model->v2hull_size=create_boundary_hull(model->v2pnts_boundary, boundary_cnt, &model->v2hull);
+    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp, "Convex Hull (%d points)\n", model->v2hull_size); }
 
 // build kdtree for nearest neighbor searches
     if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"==== kdtree with -- %d grid points and sorted v3pnts\n",numread); }
     model->v3nodes = build_v3kdtree(model->v3pnts, numread, 0);
     if(uwpkfcvm_ucvm_debug) { dump_v3pnts(model->v3pnts, numread); }
+
 }
 
 

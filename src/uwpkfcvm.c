@@ -89,6 +89,15 @@ int uwpkfcvm_init(const char *dir, const char *label) {
     // Set up the data directory.
     sprintf(uwpkfcvm_data_directory, "%s/model/%s/data/%s/", dir, label, uwpkfcvm_configuration->model_dir);
 
+    // We need to convert the point from lat, lon to UTM, let's set it up.
+    char uwpkfcvm_projstr[64];
+    snprintf(uwpkfcvm_projstr, 64, "+proj=utm +ellps=clrk66 +zone=%d +datum=NAD27 +units=m +no_defs", uwpkfcvm_configuration->utm_zone);
+    if (!(uwpkfcvm_geo2utm = proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", uwpkfcvm_projstr, NULL))) {
+        uwpkfcvm_print_error("Could not set up Proj transformation from EPSG:4326 to UTM.");
+        uwpkfcvm_print_error((char  *)proj_context_errno_string(PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
+        return (UCVM_CODE_ERROR);
+    }
+
     // Can we allocate the model, or parts of it, to memory. If so, we do.
     tempVal = uwpkfcvm_reading_model(uwpkfcvm_velocity_model);
 
@@ -98,15 +107,6 @@ int uwpkfcvm_init(const char *dir, const char *label) {
     } else if (tempVal == FAIL) {
         uwpkfcvm_print_error("No model file was found to read from.");
         return FAIL;
-    }
-
-    // We need to convert the point from lat, lon to UTM, let's set it up.
-    char uwpkfcvm_projstr[64];
-    snprintf(uwpkfcvm_projstr, 64, "+proj=utm +ellps=clrk66 +zone=%d +datum=NAD27 +units=m +no_defs", uwpkfcvm_configuration->utm_zone);
-    if (!(uwpkfcvm_geo2utm = proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", uwpkfcvm_projstr, NULL))) {
-        uwpkfcvm_print_error("Could not set up Proj transformation from EPSG:4326 to UTM.");
-        uwpkfcvm_print_error((char  *)proj_context_errno_string(PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
-        return (UCVM_CODE_ERROR);
     }
 
     // setup config_string 
@@ -154,6 +154,11 @@ int uwpkfcvm_query(uwpkfcvm_point_t *points, uwpkfcvm_properties_t *data, int nu
 
 	// is it in model ??
         if( ! in_model(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth) ) {
+            data[i].vp = -1;
+            data[i].vs = -1;
+            data[i].rho = -1;
+            data[i].qp = -1;
+            data[i].qs = -1;
             continue;
             } else { 
 	    // query for nearest data point
@@ -339,7 +344,6 @@ int uwpkfcvm_read_configuration(char *file, uwpkfcvm_configuration_t *config) {
             if (strcmp(key, "bottom_left_corner_n") == 0) config->bottom_left_corner_n = atof(value);
             if (strcmp(key, "bottom_right_corner_e") == 0) config->bottom_right_corner_e = atof(value);
             if (strcmp(key, "bottom_right_corner_n") == 0) config->bottom_right_corner_n = atof(value);
-            if (strcmp(key, "depth_interval") == 0) config->depth_interval = atof(value);
             if (strcmp(key, "seek_axis") == 0) sprintf(config->seek_axis, "%s", value);
             if (strcmp(key, "seek_direction") == 0) sprintf(config->seek_direction, "%s", value);
             if (strcmp(key, "interpolation") == 0) { 
@@ -354,8 +358,7 @@ int uwpkfcvm_read_configuration(char *file, uwpkfcvm_configuration_t *config) {
         config->seek_direction[0] == '\0' || config->seek_axis[0] == '\0' ||
         config->top_left_corner_e == 0 || config->top_left_corner_n == 0 || config->top_right_corner_e == 0 ||
         config->top_right_corner_n == 0 || config->bottom_left_corner_e == 0 || config->bottom_left_corner_n == 0 ||
-        config->bottom_right_corner_e == 0 || config->bottom_right_corner_n == 0 || config->depth == 0 ||
-        config->depth_interval == 0) {
+        config->bottom_right_corner_e == 0 || config->bottom_right_corner_n == 0 || config->depth == 0 ) {
         uwpkfcvm_print_error("One of uwpkfcvm_configuration parameter not specified. Please check your uwpkfcvm_configuration file.");
         return FAIL;
     }
@@ -396,7 +399,7 @@ static int too_big() {
  * Tries to read the model into memory.
  *
  * @param model The model parameter struct which will hold the pointers to the data either on disk or in memory.
- * @return 0 fail, SUCCESS if processed okay, 1
+ * @return FAIL 1, SUCCESS if processed okay, 0
  * is not in memory, FAIL if no file found.
  */
 int uwpkfcvm_reading_model(uwpkfcvm_model_t *model) {
@@ -411,10 +414,9 @@ int uwpkfcvm_reading_model(uwpkfcvm_model_t *model) {
        fp = fopen(current_file, "rb");
        load_model(model, uwpkfcvm_configuration->nx,
 		       uwpkfcvm_configuration->ny, uwpkfcvm_configuration->nz, fp);
-       fclose(fp);
-       return 1;
+       return SUCCESS;
     }
-    return 0;
+    return FAIL;
 }
 
 // The following functions are for dynamic library mode. If we are compiling

@@ -178,7 +178,7 @@ void uwpkfcvm_trilinear_interpolation(double x_percent, double y_percent, double
 // from uwpkfcvm_util.c
 void setup_model(uwpkfcvm_model_t *model, int cnt);
 void free_model(uwpkfcvm_model_t *model);
-int load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp);
+void load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp);
 int in_model(uwpkfcvm_model_t *model, double lat, double lon, double depth);
 int nearest_neighbor(uwpkfcvm_model_t *model, double lat, double lon, double depth);
 double vs_by_location(uwpkfcvm_model_t *model,int loc);

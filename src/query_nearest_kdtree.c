@@ -59,7 +59,7 @@ int main(int argc, char **argv)
   strcpy(queryfile, argv[3]);
 
   if(uwpkfcvm_ucvm_debug || uwpkfcvm_ucvm_debug_detail) {
-      stderrfp = fopen("uwpkfcvm_debug.log", "w+");
+      stderrfp = fopen("query_debug.log", "w+");
       fprintf(stderrfp," ===== START ===== \n");
   }
 

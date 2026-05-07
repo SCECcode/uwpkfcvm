@@ -153,7 +153,8 @@ int uwpkfcvm_query(uwpkfcvm_point_t *points, uwpkfcvm_properties_t *data, int nu
         }
 
 	// is it in model ??
-        if( ! in_model(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth) ) {
+//        if( ! in_model(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth) ) {
+        if(0) {
             data[i].vp = -1;
             data[i].vs = -1;
             data[i].rho = -1;

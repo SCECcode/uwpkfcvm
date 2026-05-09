@@ -90,13 +90,16 @@ int uwpkfcvm_init(const char *dir, const char *label) {
     sprintf(uwpkfcvm_data_directory, "%s/model/%s/data/%s/", dir, label, uwpkfcvm_configuration->model_dir);
 
     // We need to convert the point from lat, lon to UTM, let's set it up.
-    char uwpkfcvm_projstr[64];
-    snprintf(uwpkfcvm_projstr, 64, "+proj=utm +ellps=clrk66 +zone=%d +datum=NAD27 +units=m +no_defs", uwpkfcvm_configuration->utm_zone);
-    if (!(uwpkfcvm_geo2utm = proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", uwpkfcvm_projstr, NULL))) {
+    char uwpkfcvm_projstr[128];
+    snprintf(uwpkfcvm_projstr, sizeof(uwpkfcvm_projstr), "+proj=utm +zone=%d +datum=NAD27 +units=m +no_defs", uwpkfcvm_configuration->utm_zone);
+    PJ *_P = proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", uwpkfcvm_projstr, NULL);
+    if(!_P) {
         uwpkfcvm_print_error("Could not set up Proj transformation from EPSG:4326 to UTM.");
         uwpkfcvm_print_error((char  *)proj_context_errno_string(PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
         return (UCVM_CODE_ERROR);
     }
+    uwpkfcvm_geo2utm = proj_normalize_for_visualization(PJ_DEFAULT_CTX, _P);
+
 
     // Can we allocate the model, or parts of it, to memory. If so, we do.
     tempVal = uwpkfcvm_reading_model(uwpkfcvm_velocity_model);
@@ -129,19 +132,14 @@ int uwpkfcvm_init(const char *dir, const char *label) {
  * @return SUCCESS or FAIL.
  */
 int uwpkfcvm_query(uwpkfcvm_point_t *points, uwpkfcvm_properties_t *data, int numpoints) {
-    int i = 0;
-
-    double point_u = 0, point_v = 0;
-    double point_x = 0, point_y = 0; 
-				   
-    int load_x_coord = 0, load_y_coord = 0, load_z_coord = 0;
-    double x_percent = 0, y_percent = 0, z_percent = 0;
-
     uwpkfcvm_properties_t surrounding_points[8];
     int zone = uwpkfcvm_configuration->utm_zone;
 
-    for (i = 0; i < numpoints; i++) {
+    int total = uwpkfcvm_configuration->nx * uwpkfcvm_configuration->ny * uwpkfcvm_configuration->nz;
 
+    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp, "==> calling uwpkfcvm_query with %d points\n", numpoints); }
+
+    for (int i = 0; i < numpoints; i++) {
         // We need to be below the surface to service this query.
         if (points[i].depth < 0) {
             data[i].vp = -1;
@@ -152,9 +150,8 @@ int uwpkfcvm_query(uwpkfcvm_point_t *points, uwpkfcvm_properties_t *data, int nu
             continue;
         }
 
-	// is it in model ??
-//        if( ! in_model(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth) ) {
-        if(0) {
+        // is it in model ??
+        if( (! uwpkfcvm_configuration->add_1d_background) && !(in_model(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth)) ) {
             data[i].vp = -1;
             data[i].vs = -1;
             data[i].rho = -1;
@@ -162,10 +159,13 @@ int uwpkfcvm_query(uwpkfcvm_point_t *points, uwpkfcvm_properties_t *data, int nu
             data[i].qs = -1;
             continue;
             } else { 
-	    // query for nearest data point
-                int modelindex=nearest_neighbor(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth);
-                //if(uwpkfcvm_configuration->interpolation) { // do nothing for now }
-                uwpkfcvm_read_properties(uwpkfcvm_velocity_model, modelindex, &(data[i]));    
+            // query for nearest data point
+                int modelindex=nearest_neighbor(uwpkfcvm_velocity_model, points[i].latitude, points[i].longitude, points[i].depth, total);
+                if(uwpkfcvm_configuration->interpolation) { 
+                    uwpkfcvm_read_interp_properties(uwpkfcvm_velocity_model, modelindex, &(data[i]), points[i].latitude, points[i].longitude, points[i].depth);    
+                    } else {
+                    uwpkfcvm_read_properties(uwpkfcvm_velocity_model, modelindex, &(data[i]));    
+                }
         }
     }
 
@@ -224,14 +224,82 @@ double uwpkfcvm_calculate_density(double vp) {
      return retVal;
 }
 
-void uwpkfcvm_read_properties(uwpkfcvm_model_t *model, int location, uwpkfcvm_properties_t *data) {  
-
-    double vs=vs_by_location(model,location);
-
-    data->vs = vs;
-    data->vp=vp_by_location(model,location);
+void uwpkfcvm_read_properties(uwpkfcvm_model_t *model, int offset, uwpkfcvm_properties_t *data) {  
+    data->vs=vs_by_offset(model,offset);
+    data->vp=vp_by_offset(model,offset);
     /* Calculate density */
     if (data->vp > 0.0) { data->rho=uwpkfcvm_calculate_density(data->vp); }
+}
+
+double _interpolate_it(double *val, double *dist, int n, double power) {
+    double num = 0.0;
+    double den = 0.0;
+
+    for (int i = 0; i < n; i++) {
+        if (dist[i] == 0.0) { return val[i]; }
+
+        double w = 1.0 / pow(dist[i], power);
+        num += w * val[i];
+        den += w;
+    }
+
+    if (den == 0.0) { return NAN; }
+
+    return num/den;
+}
+
+//int idx_to_lldindex(int nx, int ny, int xidx, int yidx, int zidx);
+void uwpkfcvm_read_interp_properties(uwpkfcvm_model_t *model, int lldindex, uwpkfcvm_properties_t *data, double lat, double lon, double depth) {  
+    int nx=model->nx;
+    int ny=model->ny;
+    int nz=model->ny;
+    int sz=model->pnts_size;
+    KDVec3 *xyz=model->v3pnts;
+    KDVec3 query_xyz;
+
+    lld_to_xyz(&query_xyz, lat, lon, depth, 0/* don't care */, uwpkfcvm_geo2utm);
+    
+    int xidx, yidx, zidx; // starting index
+    lldindex_to_idx(lldindex, nx, ny, &xidx, &yidx, &zidx);
+
+    int *offset = (int *) malloc(8 * sizeof(int));
+    double *dist= (double *) malloc(8 * sizeof(double));
+    double *vs= (double *) malloc(8 * sizeof(double));
+    double *vp= (double *) malloc(8 * sizeof(double));
+
+    offset[0] = idx_to_lldindex(nx,ny,xidx,yidx,zidx);      // x,    y, z
+    offset[1] = idx_to_lldindex(nx,ny,xidx+1,yidx,zidx);    // x+1,  y, z
+    offset[2] = idx_to_lldindex(nx,ny,xidx,yidx+1,zidx);    // x,  y+1, z
+    offset[3] = idx_to_lldindex(nx,ny,xidx+1,yidx+1,zidx);  // x+1,y+1, z
+    offset[4] = idx_to_lldindex(nx,ny,xidx,yidx,zidx+1);    // x,    y, z+1
+    offset[5] = idx_to_lldindex(nx,ny,xidx+1,yidx,zidx+1);  // x+1,  y, z+1
+    offset[6] = idx_to_lldindex(nx,ny,xidx,yidx+1,zidx+1);  // x,  y+1, z+1
+    offset[7] = idx_to_lldindex(nx,ny,xidx+1,yidx+1,zidx+1);// x+1,y+1, z+1
+
+    for(int i=0; i<8; i++) {
+      vs[i]=vs_by_offset(model, offset[i]);
+      vp[i]=vp_by_offset(model, offset[i]);
+      dist[i]=dist_sq(&query_xyz, find_xyz_by_lldindex(xyz,sz,offset[i]));
+    }
+
+    int power=2.0; // or 1.0
+    double vs_final=_interpolate_it(vs, dist, 8, power);
+    double vp_final=_interpolate_it(vp, dist, 8, power);
+
+    if(uwpkfcvm_ucvm_debug) {
+       fprintf(stderrfp, "interp..vs before %lf after %lf\n", vs[0], vs_final);
+       fprintf(stderrfp, "interp..vp before %lf after %lf\n", vp[0], vp_final);
+    }
+
+    data->vs=vs_final;
+    data->vp=vp_final;
+    /* Calculate density */
+    if (data->vp > 0.0) { data->rho=uwpkfcvm_calculate_density(data->vp); }
+
+    free(dist);
+    free(offset);
+    free(vs);
+    free(vp);
 }
 
 /**
@@ -351,9 +419,9 @@ int uwpkfcvm_read_configuration(char *file, uwpkfcvm_configuration_t *config) {
                 config->interpolation=0;
                 if (strcmp(value,"on") == 0) config->interpolation=1;
             }
-            if (strcmp(key, "1d_background") == 0) { 
-                config->id_background=0;
-                if (strcmp(value,"on") == 0) config->id_background=1;
+            if (strcmp(key, "add_1d_background") == 0) { 
+                config->add_1d_background=0;
+                if (strcmp(value,"on") == 0) config->add_1d_background=1;
             }
         }
     }
@@ -385,22 +453,6 @@ void uwpkfcvm_print_error(char *err) {
 }
 
 /**
- * Check if the data is too big to be loaded internally (exceed maximum
- * allowable by a INT variable)
- *
- */
-static int too_big() {
-        long max_size= (long) (uwpkfcvm_configuration->nx) * uwpkfcvm_configuration->ny * uwpkfcvm_configuration->nz;
-        long delta= max_size - INT_MAX;
-
-    if( delta > 0) {
-        return 1;
-        } else {
-        return 0;
-        }
-}
-
-/**
  * Tries to read the model into memory.
  *
  * @param model The model parameter struct which will hold the pointers to the data either on disk or in memory.
@@ -408,7 +460,7 @@ static int too_big() {
  * is not in memory, FAIL if no file found.
  */
 int uwpkfcvm_reading_model(uwpkfcvm_model_t *model) {
-	
+        
     int file_count = 0;
     char current_file[128];
     FILE *fp;
@@ -418,7 +470,7 @@ int uwpkfcvm_reading_model(uwpkfcvm_model_t *model) {
     if (access(current_file, R_OK) == 0) {
        fp = fopen(current_file, "rb");
        load_model(model, uwpkfcvm_configuration->nx,
-		       uwpkfcvm_configuration->ny, uwpkfcvm_configuration->nz, fp);
+                       uwpkfcvm_configuration->ny, uwpkfcvm_configuration->nz, fp);
        return SUCCESS;
     }
     return FAIL;

@@ -34,7 +34,8 @@ typedef struct KDlld {
 
 // base on KDlld 
 // vpnts == in approximate utm
-// in ECEF space
+// in utm + depth 3D space
+// where x is utm_e, y is utm_n, z is -depth
 typedef struct KDVec3 {
     double x;
     double y;
@@ -70,7 +71,7 @@ typedef struct KDVec2 {
 } KDVec2;
 
 /** access **/ 
-void lld_to_xyz(KDVec3 *vp, double lat, double lon, double depth, int lldidx);
+void lld_to_xyz(KDVec3 *vp, double lat, double lon, double depth, int lldidx, PJ *_geo2utm);
 void dump_v3pnts(KDVec3 *vp, int n);
 KDNode3* build_v3kdtree(KDVec3 *pts, int n, int depth);
 void free_v3kdtree(KDNode3 *node);
@@ -79,6 +80,7 @@ void write_flatten_v3kdtree(const char *fname, KDNode3Disk *nodes, int n);
 KDNode3Disk *read_flatten_v3kdtree(const char *fname, int n);
 
 void lld_to_en(KDVec2 *vp, KDlld *lld, int lldindex, PJ *_geo2utm);
+void xyz_to_en(KDVec2 *vp, KDVec3 *xyz);
 void dump_v2pnts(KDVec2 *vp, int n);
 int create_boundary_hull(KDVec2 *pnts2, int n, KDVec2 **hull);
 
@@ -89,10 +91,14 @@ int to_geo(PJ *_geo2utm, double point_u, double point_v, double *lon, double *la
 void find_xyz_latlon(KDlld *pnts, int lldindex, int nX, int nY);
 void find_latlon(KDlld *pnts, int lldindex);
 
+void lldindex_to_idx(int offset, int nx, int ny, int *xidx, int *yidx, int *zidx);
+int idx_to_lldindex(int nx, int ny, int xidx, int yidx, int zidx);
+KDVec3 *find_xyz_by_lldindex(KDVec3 *xyz, int n, int target);
+double dist_sq(KDVec3* a, KDVec3* b);
+
 /** usage **/
 void kdtree_nearest(KDNode3 *node, KDVec3* query, KDVec3 **best, double *best_dist, int recursive);
 int nearest_point(KDVec3 *points, int n, KDVec3 *query);
-
 int point_in_convex(KDVec2 *poly, int n, KDVec2 p);
 
 #endif // UWPKFCVM_H

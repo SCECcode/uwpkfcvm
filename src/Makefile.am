@@ -28,9 +28,6 @@ uwpkfcvm.o: uwpkfcvm.c
 
 uwpkfcvm_static.o: uwpkfcvm.c
 	$(CC) -o $@ -c $^ $(AM_CFLAGS)
-	
-uwpkfcvm_static.o: uwpkfcvm.c
-	$(CC) -o $@ -c $^ $(AM_CFLAGS)
 
 uwpkfcvm_query.o: uwpkfcvm_query.c
 	$(CC) $(AM_CFLAGS) -o $@ -c $^

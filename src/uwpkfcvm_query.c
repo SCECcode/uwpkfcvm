@@ -17,7 +17,7 @@
 #include "ucvm_model_dtypes.h"
 #include "uwpkfcvm.h"
 
-int uwpkfcvm_debug=0;
+int uwpkfcvm_debug=1;
 
 int _compare_double(double f1, double f2) {
   double precision = 0.00001;

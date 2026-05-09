@@ -53,11 +53,11 @@ void load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp) {
       if (sscanf(line,"%lf %lf %lf %lf %lf", &lon, &lat, &depth, &vs, &vp) == 5) {
         model->pnts[numread].lat=lat;
         model->pnts[numread].lon=lon;
-        model->pnts[numread].depth=depth;
+        model->pnts[numread].depth=depth * 1000; // in m
         model->pnts[numread].vs=vs;
         model->pnts[numread].vp=vp;
         // fillin KDVec3
-        lld_to_xyz(&model->v3pnts[numread], lat, lon, depth, numread);
+        lld_to_xyz(&model->v3pnts[numread], lat, lon, (depth * 1000), numread, uwpkfcvm_geo2utm);
   
         model->pnts_zero_depth[numread]=0;
         if(depth == 0) {
@@ -67,6 +67,10 @@ void load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp) {
         numread++;
       }
     }
+    model->pnts_size=numread;
+    model->nx=NX;
+    model->ny=NY;
+    model->nz=NZ;
 
 // setup the supporting structure for searching 
     model->v2pnts = malloc( model->zero_depth_cnt * sizeof(KDVec2));
@@ -74,9 +78,7 @@ void load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp) {
     int r_idx=0;
     for(int i=0; i< numread; i++) {
       if(model->pnts_zero_depth[i]) {
-        int lldindex=model->v3pnts[i].lldindex;
-        KDlld *lld = &model->pnts[lldindex];
-        lld_to_en(&model->v2pnts[r_idx],lld,lldindex,uwpkfcvm_geo2utm);
+        xyz_to_en(&model->v2pnts[r_idx],&model->v3pnts[i]);
         r_idx++;
       }
     }
@@ -92,46 +94,51 @@ void load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp) {
     for(int i=0; i<NX; i++) {
       int t=i;
       model->v2pnts_boundary[b_idx]= model->v2pnts[t];
-      if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"1 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
+      if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"1 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
       b_idx++;
     }
     // right from bottom up
     for(int j=2; j<NY; j++) {  
       int t=(j * NX)-1;
       model->v2pnts_boundary[b_idx] = model->v2pnts[t];
-      if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"2 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
+      if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"2 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
       b_idx++;
     }
     // top row in reverse
     for(int i=1; i<NX; i++) { 
       int t= (NY * NX) - i;
       model->v2pnts_boundary[b_idx] = model->v2pnts[t];
-        if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"3 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
+        if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"3 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
         b_idx++;
     }
     // left from top down 
     for(int i=1; i<NY; i++) { 
       int t= (NX * (NY - i));
       model->v2pnts_boundary[b_idx] =  model->v2pnts[t];
-      if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"4 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
+      if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"4 add v2pnts_boundary %d\n",model->v2pnts[t].lldindex); }
       b_idx++;
     }
     // should be same as boundary_cnt
     model->boundary_size=b_idx;
  
     if(uwpkfcvm_ucvm_debug) { 
-      fprintf(stderrfp,"dump v2pnts  %d\n",r_idx);
-      dump_v2pnts(model->v2pnts, r_idx );
+      fprintf(stderrfp,"== v2pnts (whole layer at depth 0) %d\n",r_idx);
+
+      if(uwpkfcvm_ucvm_debug_detail) { 
+        fprintf(stderrfp,"v2pnts (whole layer at depth 0) %d\n",r_idx);
+        dump_v2pnts(model->v2pnts, r_idx );
+      }
     }
   
-    for(int k=0; k< boundary_cnt; k++) {
-      if(uwpkfcvm_ucvm_debug) { find_latlon(model->pnts, model->v2pnts_boundary[k].lldindex); }
-      if(uwpkfcvm_ucvm_debug) { 
-        find_latlon(model->pnts, model->v2pnts_boundary[k].lldindex);
-        if(uwpkfcvm_ucvm_debug) { 
+    if(uwpkfcvm_ucvm_debug) { 
+      fprintf(stderrfp,"== v2pnts_boundary (just boundary at depth 0) %d\n",b_idx);
+      if(uwpkfcvm_ucvm_debug_detail) { 
+        fprintf(stderrfp,"dump v2pnts_boundary (at depth 0) %d\n",b_idx);
+        for(int k=0; k< boundary_cnt; k++) {
+          find_latlon(model->pnts, model->v2pnts_boundary[k].lldindex);
           fprintf(stderrfp,"BOUNDARY e(%lf) n(%lf)\n",
-			   model->v2pnts_boundary[k].utm_e, model->v2pnts_boundary[k].utm_n);
-	}
+	  		   model->v2pnts_boundary[k].utm_e, model->v2pnts_boundary[k].utm_n);
+	}   
       }
     } 
 
@@ -155,7 +162,7 @@ int in_model(uwpkfcvm_model_t *model, double lat, double lon, double depth) {
     lld_to_en(&query_eu, &query_lld, 0/* don't care */, uwpkfcvm_geo2utm);
     int rc=point_in_convex(model->v2hull, model->v2hull_size, query_eu);
 
-    if(uwpkfcvm_ucvm_debug) { 
+    if(uwpkfcvm_ucvm_debug_detail) { 
       if(rc) { fprintf(stderrfp,"  in model\n"); }
       else { fprintf(stderrfp,"  out model\n");}
     }
@@ -164,23 +171,42 @@ int in_model(uwpkfcvm_model_t *model, double lat, double lon, double depth) {
 }
 
 // return the llindex into the model
-int nearest_neighbor(uwpkfcvm_model_t *model, double lat, double lon, double depth) {
+int nearest_neighbor(uwpkfcvm_model_t *model, double lat, double lon, double depth, int total) {
     KDVec3 query_xyz;
     KDVec3 *best;
     double best_dist = -1;
+    int rc;
 
-    lld_to_xyz(&query_xyz, lat, lon, depth, 0/* don't care */);
+    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"\n..nearest_neighbor to target => lon(%f) lat(%f) depth(%f)\n", lon,lat,depth); }
+
+    lld_to_xyz(&query_xyz, lat, lon, depth, 0/* don't care */, uwpkfcvm_geo2utm);
+
+    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"SEARCH with kdtree_nearest \n"); }
     kdtree_nearest(model->v3nodes, &query_xyz, &best, &best_dist, 1);
-    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"     >>>main: kdtree_nearest, best lldindex(%d), best dist(%lf)\n", best->lldindex, best_dist); }
-    return best->lldindex;
+    rc=best->lldindex;
+    if(uwpkfcvm_ucvm_debug) { 
+	fprintf(stderrfp,"     >>>main: kdtree_nearest, best lldindex(%d), best dist(%lf)\n", best->lldindex, best_dist);
+        fprintf(stderrfp,"  %lf %lf %lf\n", model->pnts[rc].lon, model->pnts[rc].lat, model->pnts[rc].depth);
+    }
+
+/**
+    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"SEARCH with brute force \n"); }
+    rc=nearest_point(model->v3pnts, total, &query_xyz);
+    if(uwpkfcvm_ucvm_debug) { 
+	fprintf(stderrfp,"     >>>main: nearest_point,  best lldindex(%d)\n", rc);
+        fprintf(stderrfp,"  %lf %lf %lf\n", model->pnts[rc].lon, model->pnts[rc].lat, model->pnts[rc].depth);
+    }
+**/
+
+    return rc;
 }
 
 
-double vs_by_location(uwpkfcvm_model_t *model, int loc) {
+double vs_by_offset(uwpkfcvm_model_t *model, int loc) {
     return model->pnts[loc].vs;
 }
 
-double vp_by_location(uwpkfcvm_model_t *model, int loc) {
+double vp_by_offset(uwpkfcvm_model_t *model, int loc) {
     return model->pnts[loc].vp;
 }
 

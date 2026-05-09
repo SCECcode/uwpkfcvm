@@ -56,11 +56,11 @@ top_right_corner_e = 740631.667661
 top_right_corner_n = 4062734.743951
 
 ## bilinear or trilinear interpolation
-interpolation = off
+interpolation = on 
 
 # Seek method, fast-X or fast-Y
 seek_axis = fast-X
 seek_direction = top-down
 
-1d_background = off
+add_1d_background = off
 

@@ -20,7 +20,7 @@ void usage() {
 }
 
 #define KD_MAX_LINE 1000
-int uwpkfcvm_ucvm_debug=1;
+int uwpkfcvm_ucvm_debug=0;
 int uwpkfcvm_ucvm_debug_detail=0;
 FILE *stderrfp=NULL;
 int is_rigid=1;
@@ -43,10 +43,12 @@ int main(int argc, char **argv)
 
   double lat, lon, depth, vs, vp;
   KDlld *pnts=NULL;
-  KDVec3 *v3pnts=NULL;  // x,y,z
+  int pnts_size=0;
+  KDVec3 *v3pnts=NULL;  // e,n,depth
   KDNode3 *v3nodes=NULL; // tree v3nodes for vec3
   int *pnts_zero_depth;  // track which v3pnts has z of 0
-		    
+                         
+                    
   KDVec2 *v2pnts=NULL; // e,n
   KDVec2 *v2pnts_boundary=NULL; 
 
@@ -57,6 +59,8 @@ int main(int argc, char **argv)
   if(sscanf(argv[1], "%d", &maxnum) != 1) { return 1; }
   strcpy(datafile, argv[2]);
   strcpy(queryfile, argv[3]);
+
+  setup_to_utm(&_geo2utm, MODEL_ZONE);
 
   if(uwpkfcvm_ucvm_debug || uwpkfcvm_ucvm_debug_detail) {
       stderrfp = fopen("query_debug.log", "w+");
@@ -77,26 +81,25 @@ int main(int argc, char **argv)
       if (sscanf(line,"%lf %lf %lf %lf %lf", &lon, &lat, &depth, &vs, &vp) == 5) {
          pnts[numread].lat=lat;
          pnts[numread].lon=lon;
-         pnts[numread].depth=depth;
+         pnts[numread].depth=depth*1000;
          pnts[numread].vs=vs;
          pnts[numread].vp=vp;
          // fillin KDVec3
-	 lld_to_xyz(&v3pnts[numread], lat, lon, depth, numread);   
-	 
-	 pnts_zero_depth[numread]=0;
+         lld_to_xyz(&v3pnts[numread], lat, lon, depth*1000, numread, _geo2utm);   
+         
+         pnts_zero_depth[numread]=0;
          if(depth == 0 && is_rigid) {
              pnts_zero_depth[numread]=1;
-	     zero_depth_cnt++;
+             zero_depth_cnt++;
          }
          numread++;
       }
   }
+  pnts_size=numread;
+	  
   fclose(fp);
 
   if(is_rigid) {
-
-      setup_to_utm(&_geo2utm, MODEL_ZONE);
-
       int r_idx=0;
       /** whole layer **/
       v2pnts = malloc( zero_depth_cnt * sizeof(KDVec2));
@@ -104,8 +107,8 @@ int main(int argc, char **argv)
          if(pnts_zero_depth[i]) {
            int lldindex=v3pnts[i].lldindex;
            KDlld *lld = &pnts[lldindex];
-           lld_to_en(&v2pnts[r_idx],lld,lldindex,_geo2utm);
-	   r_idx++;
+           xyz_to_en(&v2pnts[r_idx],&v3pnts[i]);
+           r_idx++;
          }
       }
 
@@ -125,14 +128,14 @@ int main(int argc, char **argv)
       // right from bottom up
       for(int j=2; j<NY; j++) {  
          int t=(j * NX)-1;
-	 v2pnts_boundary[b_idx] =  v2pnts[t];
+         v2pnts_boundary[b_idx] =  v2pnts[t];
          if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"2 add v2pnts_boundary %d\n",v2pnts[t].lldindex); }
          b_idx++;
       }
       // top row in reverse
       for(int i=1; i<NX; i++) { 
          int t= (NY * NX) - i;
-	 v2pnts_boundary[b_idx] =  v2pnts[t];
+         v2pnts_boundary[b_idx] =  v2pnts[t];
          if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"3 add v2pnts_boundary %d\n",v2pnts[t].lldindex); }
          b_idx++;
       }
@@ -140,7 +143,7 @@ int main(int argc, char **argv)
       // left from top down 
       for(int i=1; i<NY; i++) { 
          int t= (NX * (NY - i));
-	 v2pnts_boundary[b_idx] =  v2pnts[t];
+         v2pnts_boundary[b_idx] =  v2pnts[t];
          if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"4 add v2pnts_boundary %d\n",v2pnts[t].lldindex); }
          b_idx++;
       }
@@ -176,32 +179,34 @@ int main(int argc, char **argv)
 fprintf(stderr,"\n>>%lf %lf %lf \n", lon,lat,depth);
          if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"\nQUERY point -> lat(%lf) lon(%lf) depth(%lf) \n", lat, lon, depth); }
 
-	 lld_to_xyz(&query_xyz, lat, lon, depth, 0/* don't care */);
+         lld_to_xyz(&query_xyz, lat, lon, depth, 0/* don't care */, _geo2utm);
+
          if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"\nSEARCH with kdtree \n"); }
-fprintf(stderr,"nearest point kdtree SEARCH\n"); 
-	 kdtree_nearest(v3nodes, &query_xyz, &best, &best_dist, 1);
-	 if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"     >>>main: kdtree_nearest, best lldindex(%d), best dist(%lf)\n", best->lldindex, best_dist); }
-	 find_xyz_latlon(pnts, best->lldindex,NX,NY);
-	 fprintf(stderr,"  %lf %lf %lf\n",
+fprintf(stderr,"nearest point: kdtree SEARCH\n"); 
+         kdtree_nearest(v3nodes, &query_xyz, &best, &best_dist, 1);
+         if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"     >>>main: kdtree_nearest, best lldindex(%d), best dist(%lf)\n", best->lldindex, best_dist); }
+         find_xyz_latlon(pnts, best->lldindex,NX,NY);
+         fprintf(stderr,"  %lf %lf %lf\n",
                    pnts[best->lldindex].lon, pnts[best->lldindex].lat, pnts[best->lldindex].depth);
 
          if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"\nSEARCH with brute force \n"); }
-fprintf(stderr,"nearest point brute force  SEARCH\n"); 
-	 int rc=nearest_point(v3pnts, numread, &query_xyz);
+fprintf(stderr,"nearest point: brute force  SEARCH\n"); 
+         int rc=nearest_point(v3pnts, numread, &query_xyz);
          if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"     >>>main: nearest_point,  best lldindex(%d)\n", rc); }
-	 fprintf(stderr,"  %lf %lf %lf\n", pnts[rc].lon, pnts[rc].lat, pnts[rc].depth);
+         fprintf(stderr,"  %lf %lf %lf\n", pnts[rc].lon, pnts[rc].lat, pnts[rc].depth);
 
-	 if (is_rigid) {
-fprintf(stderr,"in model hull SEARCH\n"); 
+         if (is_rigid) {
+fprintf(stderr,"in model: hull SEARCH\n"); 
            query_lld.lat=lat;
            query_lld.lon=lon;
            query_lld.depth=depth;
-	   lld_to_en(&query_eu, &query_lld, 0/* don't care */, _geo2utm);
-	   int yes_in=point_in_convex(v2hull, hull_size, query_eu);
-           if(yes_in) { fprintf(stderr,"  in model\n"); }
-	      else { fprintf(stderr,"  out model\n");}
-
+           lld_to_en(&query_eu, &query_lld, 0/* don't care */, _geo2utm);
+           int yes_in=point_in_convex(v2hull, hull_size, query_eu);
+           if(yes_in) {
+              fprintf(stderr,"  in model\n");
+	   } else { fprintf(stderr,"  out model\n");}
          }
+
          numquery++;
       }
   }
@@ -214,5 +219,6 @@ fprintf(stderr,"in model hull SEARCH\n");
   if(v2pnts) free(v2pnts);
   if(v2pnts_boundary) free(v2pnts_boundary);
   if(v2hull) free(v2hull);
+  free(_geo2utm);
   if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"\n..DONE..\n"); }
 }

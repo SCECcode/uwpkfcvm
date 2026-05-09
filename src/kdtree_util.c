@@ -7,15 +7,28 @@
 #include <math.h>
 #include "kdtree_util.h"
 
+void lld_to_xyz(KDVec3 *p, double lat, double lon, double depth, int lldidx, PJ *_geo2utm) {
+    double utm_e;
+    double utm_n;
+
+    to_utm(_geo2utm, lon, lat, &utm_e, &utm_n);
+
+    p->x = utm_e;
+    p->y = utm_n;
+    p->z = -depth;
+    p->lldindex=lldidx;  // index into the whole data stream
+    if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"    lld_to_xyz (%d), %lf %lf %lf(negative)\n", lldidx, p->x, p->y, p->z); }
+}
+
 // to ECEF global space -- global 3D Cartesian space
-void lld_to_xyz(KDVec3 *p, double lat, double lon, double depth, int lldidx)
+void lld_to_xyzECEF(KDVec3 *p, double lat, double lon, double depth, int lldidx)
 {
     const double a = 6378137.0;            // WGS84 semi-major axis
     const double e2 = 6.69437999014e-3;    // eccentricity^2
 
     double nlat = lat * M_PI / 180.0;
     double nlon = lon * M_PI / 180.0;
-    double h = depth * 1000.0;  // depth → positive height
+    double h = depth * -1.0;  // depth → positive depth
 
     double sin_lat = sin(nlat);
     double cos_lat = cos(nlat);
@@ -33,14 +46,14 @@ void lld_to_xyz(KDVec3 *p, double lat, double lon, double depth, int lldidx)
 void dump_v3pnts(KDVec3 *vp, int n) {
      for(int i=0; i < n; i++) {
        KDVec3 *x = &vp[i];
-       if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," DUMP v3pnts : %d  is lldindex(%d) \n",i, x->lldindex); }
+       if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," DUMP v3pnts : i(%d)  is lldindex(%d) \n",i, x->lldindex); }
      }
 }
 
 void dump_v2pnts(KDVec2 *vp, int n) {
      for(int i=0; i < n; i++) {
        KDVec2 *p = &vp[i];
-       if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," DUMP v2pnts : %d  is lldindex(%d) \n",i, p->lldindex); }
+       if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," DUMP v2pnts : i(%d)  is lldindex(%d) \n",i, p->lldindex); }
      }
 }
 
@@ -147,10 +160,12 @@ KDNode3Disk *read_flatten_v3kdtree(const char *fname, int n) {
 
 // nearest code
 double dist_sq(KDVec3* a, KDVec3* b) {
+    if(a->lldindex == b->lldindex)
+      return 0.0;
     double dx = a->x - b->x;
     double dy = a->y - b->y;
     double dz = a->z - b->z;
-    double rc = dx*dx + dy*dy + dz*dz;
+    double rc = sqrt(dx*dx + dy*dy + dz*dz);
     if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"              dist_sq : distance to (%d) is  a=%lf\n", a->lldindex, rc); }
      
     return rc;
@@ -170,6 +185,7 @@ int nearest_point(KDVec3 *points, int n, KDVec3 *query) {
         }
     }
     int rc = points[best_idx].lldindex;
+    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   nearest_point : found (%d)\n", rc); }
     return rc;
 }
 
@@ -183,12 +199,11 @@ int nearest_point(KDVec3 *points, int n, KDVec3 *query) {
 void kdtree_nearest(KDNode3 *node, KDVec3 *query, KDVec3 **best, double *best_dist, int recursive) {
     if (!node) return;
 
-    if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"    ==CALLING kdtree_nearest==\n"); }
     double d = dist_sq(node->point, query);
     if ( *best_dist == -1 || d < *best_dist) {
         *best_dist = d;
         *best = node->point;
-	if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   == CALLING kdtree_nearest(%d)  -- assign to best (%d) %lf\n", recursive, (*best)->lldindex, *best_dist); }
+	if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," step kdtree_nearest(%d)  -- assign to best (%d) %lf\n", recursive, (*best)->lldindex, *best_dist); }
     }
 
     int axis = node->axis;
@@ -210,17 +225,23 @@ void kdtree_nearest(KDNode3 *node, KDVec3 *query, KDVec3 **best, double *best_di
 
 /************************************************************/
 int setup_to_utm(PJ **_geo2utm, int MODEL_ZONE) {
-  char _projstr[64];
+  char _projstr[128];
 
-  snprintf(_projstr, 64, "+proj=utm +ellps=clrk66 +zone=%d +datum=NAD27 +units=m +no_defs", MODEL_ZONE);
-  if (!(*_geo2utm = proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", _projstr, NULL))) {
-    fprintf(stderr,"%s\n",(char  *)proj_context_errno_string(PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
+  snprintf(_projstr, sizeof(_projstr), "+proj=utm +zone=%d +datum=NAD27 +units=m +no_defs", MODEL_ZONE);
+  *_geo2utm=proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", _projstr, NULL);
+
+  if(! *_geo2utm) {
+    fprintf(stderr,"XX %s\n",(char  *)proj_context_errno_string(PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
     return 1;
   }
+
+  *_geo2utm = proj_normalize_for_visualization(PJ_DEFAULT_CTX, *_geo2utm);
+
+  return 0;
 }
 
 int to_utm(PJ *_geo2utm, double geo_lon, double geo_lat, double *utm_e, double *utm_n) {
-  PJ_COORD xyzSrc = proj_coord(geo_lat, geo_lon, 0.0, HUGE_VAL);
+  PJ_COORD xyzSrc = proj_coord(geo_lon, geo_lat, 0.0, HUGE_VAL);
   PJ_COORD xyzDest = proj_trans(_geo2utm, PJ_FWD, xyzSrc);
   int err = proj_context_errno(PJ_DEFAULT_CTX);
   if (err) {
@@ -265,6 +286,12 @@ void lld_to_en(KDVec2 *enu, KDlld *lld, int lldindex, PJ *_geo2utm) {
     enu->utm_n = utm_n;
 
     enu->lldindex = lldindex;  // index into the whole data stream
+}
+
+void xyz_to_en(KDVec2 *enu, KDVec3 *xyz) {
+    enu->utm_e = xyz->x;
+    enu->utm_n = xyz->y;
+    enu->lldindex = xyz->lldindex;  // index into the whole data stream
 }
 
 
@@ -340,4 +367,30 @@ int point_in_convex(KDVec2 *poly, int n, KDVec2 p) {
     return cross(poly[l], poly[l+1], p) >= 0;
 }
 
+/**** interp with neighboring points *************/
+// offset=(z_idx)*(ny * nx)+(y_idx)*(nx)+x_idx;
+void lldindex_to_idx(int offset, int nx, int ny, int *xidx, int *yidx, int *zidx) {
+  *zidx = offset / (nx * ny);
+  int rem = offset % (nx * ny);
 
+  *yidx = rem / nx;
+  *xidx = rem % nx;
+}
+
+int idx_to_lldindex(int nx, int ny, int xidx, int yidx, int zidx) {
+  int offset =(zidx)*(ny * nx)+(yidx)*(nx)+xidx;
+  return offset;
+}
+
+
+// brute force look up
+KDVec3 *find_xyz_by_lldindex(KDVec3 *xyz, int n, int target){
+
+  KDVec3 *item;
+  for(int i=0; i<n; i++) {
+    item = &xyz[i];
+    if(item->lldindex == target)
+        return item;
+  }
+  return NULL;
+}

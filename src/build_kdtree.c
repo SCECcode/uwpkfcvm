@@ -23,7 +23,8 @@ void usage() {
 int uwpkfcvm_ucvm_debug=1;
 int uwpkfcvm_ucvm_debug_detail=0;
 FILE *stderrfp=NULL;
-
+PJ *_geo2utm = NULL;
+int MODEL_ZONE=10;
 
 #define KD_MAX_LINE 1000
 
@@ -50,6 +51,7 @@ int main(int argc, char **argv)
       fprintf(stderrfp," ===== START ===== \n");
   }
 
+  setup_to_utm(&_geo2utm, MODEL_ZONE);
 
   pnts = malloc(maxnum * sizeof(KDlld));
   vpnts = malloc(maxnum * sizeof(KDVec3));
@@ -64,10 +66,10 @@ int main(int argc, char **argv)
       if (sscanf(line,"%lf %lf %lf %lf %lf", &lon, &lat, &depth, &vs, &vp) == 5) {
          pnts[numread].lat=lat;
          pnts[numread].lon=lon;
-         pnts[numread].depth=depth;
+         pnts[numread].depth=depth * 1000;
          pnts[numread].vs=vs;
          pnts[numread].vp=vp;
-	 lld_to_xyz(&vpnts[numread], lat, lon, depth, numread);   
+	 lld_to_xyz(&vpnts[numread], lat, lon, depth, numread, _geo2utm);   
          numread++;
       }
   }
@@ -86,5 +88,6 @@ int main(int argc, char **argv)
   free_v3kdtree(nodes);
   free(pnts);
   free(vpnts);
+  free(_geo2utm);
   fprintf(stderr,"\n..DONE..\n");
 }

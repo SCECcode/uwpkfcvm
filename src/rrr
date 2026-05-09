@@ -1,3 +1,10 @@
+#datapoints": 156240
+#plot_horizontal_slice.py -d vp -c uwpkfcvm -s 0.005 -a sd -o rrr.png -n $UCVM_INSTALL_PATH/conf/ucvm.conf -i $UCVM_INSTALL_PATH -e 4000 -b 35.0553,-121.8185 -u 36.7284,-119.5016 -A 3.0,6.0
 
-plot_horizontal_slice.py -d vp -c uwpkfcvm -s 0.0163 -a sd -o rrr.png -n $UCVM_INSTALL_PATH/conf/ucvm.conf -i $UCVM_INSTALL_PATH -e 4000 -b 35.0553,-121.8185 -u 36.7284,-119.5016 -A 3.0,6.0
+#datapoints": 61401
+plot_horizontal_slice.py -d vp -c uwpkfcvm -s 0.008 -a sd -o rrr.png -n $UCVM_INSTALL_PATH/conf/ucvm.conf -i $UCVM_INSTALL_PATH -e 4000 -b 35.0553,-121.8185 -u 36.7284,-119.5016 -A 3.0,6.0
+
+## original
+#datapoints": 14976
+#plot_horizontal_slice.py -d vp -c uwpkfcvm -s 0.0163 -a sd -o rrr.png -n $UCVM_INSTALL_PATH/conf/ucvm.conf -i $UCVM_INSTALL_PATH -e 4000 -b 35.0553,-121.8185 -u 36.7284,-119.5016 -A 3.0,6.0
 

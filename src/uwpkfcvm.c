@@ -282,7 +282,7 @@ void uwpkfcvm_read_interp_properties(uwpkfcvm_model_t *model, int lldindex, uwpk
       dist[i]=dist_sq(&query_xyz, find_xyz_by_lldindex(xyz,sz,offset[i]));
     }
 
-    int power=2.0; // or 1.0
+    int power=1.0; // or 1.0
     double vs_final=_interpolate_it(vs, dist, 8, power);
     double vp_final=_interpolate_it(vp, dist, 8, power);
 

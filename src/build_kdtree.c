@@ -69,7 +69,7 @@ int main(int argc, char **argv)
          pnts[numread].depth=depth * 1000;
          pnts[numread].vs=vs;
          pnts[numread].vp=vp;
-	 lld_to_xyz(&vpnts[numread], lat, lon, depth, numread, _geo2utm);   
+	 lld_to_xyz(&vpnts[numread], lat, lon, depth, numread);
          numread++;
       }
   }

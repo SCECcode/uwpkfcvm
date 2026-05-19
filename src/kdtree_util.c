@@ -5,9 +5,10 @@
 **/
 
 #include <math.h>
+#include <float.h>
 #include "kdtree_util.h"
 
-void lld_to_xyz(KDVec3 *p, double lat, double lon, double depth, int lldidx, PJ *_geo2utm) {
+void lld_to_xyzEU(KDVec3 *p, double lat, double lon, double depth, int lldidx, PJ *_geo2utm) {
     double utm_e;
     double utm_n;
 
@@ -21,7 +22,7 @@ void lld_to_xyz(KDVec3 *p, double lat, double lon, double depth, int lldidx, PJ 
 }
 
 // to ECEF global space -- global 3D Cartesian space
-void lld_to_xyzECEF(KDVec3 *p, double lat, double lon, double depth, int lldidx)
+void lld_to_xyz(KDVec3 *p, double lat, double lon, double depth, int lldidx)
 {
     const double a = 6378137.0;            // WGS84 semi-major axis
     const double e2 = 6.69437999014e-3;    // eccentricity^2
@@ -46,14 +47,14 @@ void lld_to_xyzECEF(KDVec3 *p, double lat, double lon, double depth, int lldidx)
 void dump_v3pnts(KDVec3 *vp, int n) {
      for(int i=0; i < n; i++) {
        KDVec3 *x = &vp[i];
-       if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," DUMP v3pnts : i(%d)  is lldindex(%d) \n",i, x->lldindex); }
+       if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp," DUMP v3pnts : i(%d)  is lldindex(%d) \n",i, x->lldindex); }
      }
 }
 
 void dump_v2pnts(KDVec2 *vp, int n) {
      for(int i=0; i < n; i++) {
        KDVec2 *p = &vp[i];
-       if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," DUMP v2pnts : i(%d)  is lldindex(%d) \n",i, p->lldindex); }
+       if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp," DUMP v2pnts : i(%d)  is lldindex(%d) \n",i, p->lldindex); }
      }
 }
 
@@ -77,13 +78,43 @@ void find_xyz_latlon(KDlld *pnts, int lldindex,int nX, int nY) {
 		     xidx, yidx, zidx); }
 }
 void find_latlon(KDlld *pnts, int lldindex) {
-     if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"%lf %lf %lf\n", 
+     if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"find_latlon: %lf %lf %lf\n", 
 		      pnts[lldindex].lon, pnts[lldindex].lat, pnts[lldindex].depth);}
 }
 
-int cmp_x(const void *a, const void *b) { return ((KDVec3*)a)->x > ((KDVec3*)b)->x; }
-int cmp_y(const void *a, const void *b) { return ((KDVec3*)a)->y > ((KDVec3*)b)->y; }
-int cmp_z(const void *a, const void *b) { return ((KDVec3*)a)->z > ((KDVec3*)b)->z; }
+//int cmp_x(const void *a, const void *b) { return ((KDVec3*)a)->x > ((KDVec3*)b)->x; }
+//int cmp_y(const void *a, const void *b) { return ((KDVec3*)a)->y > ((KDVec3*)b)->y; }
+//int cmp_z(const void *a, const void *b) { return ((KDVec3*)a)->z > ((KDVec3*)b)->z; }
+
+int cmp_x(const void *a, const void *b)
+{
+    const KDVec3 *pa = (const KDVec3 *)a;
+    const KDVec3 *pb = (const KDVec3 *)b;
+
+    if (pa->x < pb->x) return -1;
+    if (pa->x > pb->x) return 1;
+    return 0;
+}
+
+int cmp_y(const void *a, const void *b)
+{
+    const KDVec3 *pa = (const KDVec3 *)a;
+    const KDVec3 *pb = (const KDVec3 *)b;
+
+    if (pa->y < pb->y) return -1;
+    if (pa->y > pb->y) return 1;
+    return 0;
+}
+
+int cmp_z(const void *a, const void *b)
+{
+    const KDVec3 *pa = (const KDVec3 *)a;
+    const KDVec3 *pb = (const KDVec3 *)b;
+
+    if (pa->z < pb->z) return -1;
+    if (pa->z > pb->z) return 1;
+    return 0;
+}
 
 // n=number of points
 // depth start at 0
@@ -92,14 +123,19 @@ KDNode3* build_v3kdtree(KDVec3 *pts, int n, int depth)
     if (n <= 0) return NULL;
 
     int axis = depth % 3;
+
     if (axis == 0) qsort(pts, n, sizeof(KDVec3), cmp_x);
-    if (axis == 1) qsort(pts, n, sizeof(KDVec3), cmp_y);
-    if (axis == 2) qsort(pts, n, sizeof(KDVec3), cmp_z);
+    else if (axis == 1) qsort(pts, n, sizeof(KDVec3), cmp_y);
+    else qsort(pts, n, sizeof(KDVec3), cmp_z);
+
+//    if (axis == 0) qsort(pts, n, sizeof(KDVec3), cmp_x);
+//    if (axis == 1) qsort(pts, n, sizeof(KDVec3), cmp_y);
+//    if (axis == 2) qsort(pts, n, sizeof(KDVec3), cmp_z);
 
     int mid = n / 2;
 
     KDNode3 *node = malloc(sizeof(KDNode3));
-    node->point = &pts[mid];
+    node->point = pts[mid];
     node->axis = axis;
 
     node->left  = build_v3kdtree(pts, mid, depth+1);
@@ -119,11 +155,11 @@ int flatten_v3kdtree(KDNode3 *node, KDNode3Disk *out, int *pos) {
 
     int my_id = (*pos)++;
 
-    out[my_id].x = node->point->x;
-    out[my_id].y = node->point->y;
-    out[my_id].z = node->point->z;
+    out[my_id].x = node->point.x;
+    out[my_id].y = node->point.y;
+    out[my_id].z = node->point.z;
     out[my_id].axis = node->axis;
-    out[my_id].lldindex = node->point->lldindex;
+    out[my_id].lldindex = node->point.lldindex;
 
     out[my_id].left  = flatten_v3kdtree(node->left,  out, pos);
     out[my_id].right = flatten_v3kdtree(node->right, out, pos);
@@ -160,12 +196,14 @@ KDNode3Disk *read_flatten_v3kdtree(const char *fname, int n) {
 
 // nearest code
 double dist_sq(KDVec3* a, KDVec3* b) {
-    if(a->lldindex == b->lldindex)
+    if(a->lldindex == b->lldindex) {
       return 0.0;
+    }
     double dx = a->x - b->x;
     double dy = a->y - b->y;
     double dz = a->z - b->z;
-    double rc = sqrt(dx*dx + dy*dy + dz*dz);
+    //double rc = sqrt(dx*dx + dy*dy + dz*dz);
+    double rc = dx*dx + dy*dy + dz*dz;
     if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp,"              dist_sq : distance to (%d) is  a=%lf\n", a->lldindex, rc); }
      
     return rc;
@@ -175,18 +213,66 @@ int nearest_point(KDVec3 *points, int n, KDVec3 *query) {
 
     if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"    ==CALLING nearest_point ==\n"); }
     int best_idx = -1;
-    double best_dist = 1e100;
+    double best_dist = DBL_MAX;
 
+    double d;
     for (int i = 0; i < n; i++) {
-        double d = dist_sq(&points[i], query);
+        d = dist_sq(&points[i], query);
         if (d < best_dist) {
             best_dist = d;
             best_idx = i;
         }
     }
+
     int rc = points[best_idx].lldindex;
     if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   nearest_point : found (%d)\n", rc); }
     return rc;
+}
+
+// total=all points,  N=number of top points
+int nearest_N_points(KDVec3 *points, int total, KDVec3 *query, int N, int *out_idx)
+{
+    if (uwpkfcvm_ucvm_debug) { fprintf(stderrfp, "    ==CALLING nearest_X_points ==\n"); }
+
+    double best_dist[N];
+    int best_pos[N];
+
+    for (int i = 0; i < N; i++) {
+        best_dist[i] = DBL_MAX;
+        best_pos[i] = -1;
+        out_idx[i] = -1;
+    }
+
+    for (int i = 0; i < total; i++) {
+        double d = dist_sq(&points[i], query);
+
+        if (d < best_dist[N-1]) {
+            int j = N-1;
+            while (j > 0 && d < best_dist[j - 1]) {
+                best_dist[j] = best_dist[j - 1];
+                best_pos[j] = best_pos[j - 1];
+                j--;
+            }
+            best_dist[j] = d;
+            best_pos[j] = i;
+        }
+    }
+
+    for (int i = 0; i < N; i++) {
+        if (best_pos[i] >= 0) {
+            out_idx[i] = points[best_pos[i]].lldindex;
+        }
+    }
+
+    if (uwpkfcvm_ucvm_debug) {
+        fprintf(stderrfp, "   nearest_N_points: found :");
+        for (int i = 0; i < N; i++) {
+            fprintf(stderrfp, " %d,",out_idx[i]);
+        }
+	fprintf(stderrfp,"\n");
+    }
+
+    return 0;
 }
 
 
@@ -199,19 +285,19 @@ int nearest_point(KDVec3 *points, int n, KDVec3 *query) {
 void kdtree_nearest(KDNode3 *node, KDVec3 *query, KDVec3 **best, double *best_dist, int recursive) {
     if (!node) return;
 
-    double d = dist_sq(node->point, query);
+    double d = dist_sq(&(node->point), query);
     if ( *best_dist == -1 || d < *best_dist) {
         *best_dist = d;
-        *best = node->point;
+        *best = &(node->point);
 	if(uwpkfcvm_ucvm_debug_detail) { fprintf(stderrfp," step kdtree_nearest(%d)  -- assign to best (%d) %lf\n", recursive, (*best)->lldindex, *best_dist); }
     }
 
     int axis = node->axis;
     double diff;
 
-    if (axis == 0) diff = query->x - node->point->x;
-    else if (axis == 1) diff = query->y - node->point->y;
-    else diff = query->z - node->point->z;
+    if (axis == 0) diff = query->x - node->point.x;
+    else if (axis == 1) diff = query->y - node->point.y;
+    else diff = query->z - node->point.z;
 
     KDNode3 *first  = diff < 0 ? node->left  : node->right;
     KDNode3 *second = diff < 0 ? node->right : node->left;
@@ -224,14 +310,15 @@ void kdtree_nearest(KDNode3 *node, KDVec3 *query, KDVec3 **best, double *best_di
 }
 
 /************************************************************/
-int setup_to_utm(PJ **_geo2utm, int MODEL_ZONE) {
+int setup_to_utm2(PJ **_geo2utm, int MODEL_ZONE) {
   char _projstr[128];
 
-  snprintf(_projstr, sizeof(_projstr), "+proj=utm +zone=%d +datum=NAD27 +units=m +no_defs", MODEL_ZONE);
+  snprintf(_projstr, sizeof(_projstr), "+proj=utm +zone=%d +north +datum=NAD27 +units=m +no_defs", MODEL_ZONE);
+  fprintf(stderr," proj string .. %s\n", _projstr);
   *_geo2utm=proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", _projstr, NULL);
 
   if(! *_geo2utm) {
-    fprintf(stderr,"XX %s\n",(char  *)proj_context_errno_string(PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
+    fprintf(stderr,"ERROR: %s\n",(char  *)proj_context_errno_string(PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
     return 1;
   }
 
@@ -239,6 +326,29 @@ int setup_to_utm(PJ **_geo2utm, int MODEL_ZONE) {
 
   return 0;
 }
+
+
+int setup_to_utm(PJ **_geo2utm, int zone)
+{
+    char epsg_code[32];
+
+    // WGS84 UTM north hemisphere
+    snprintf(epsg_code, sizeof(epsg_code), "EPSG:%d", 32600 + zone);
+
+    *_geo2utm = proj_create_crs_to_crs( PJ_DEFAULT_CTX, "EPSG:4326", epsg_code, NULL);
+
+    if (!*_geo2utm) {
+        fprintf(stderr, "ERROR: %s\n", proj_context_errno_string( PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
+        return 1;
+    }
+
+    *_geo2utm = proj_normalize_for_visualization(
+        PJ_DEFAULT_CTX,
+        *_geo2utm);
+
+    return 0;
+}
+
 
 int to_utm(PJ *_geo2utm, double geo_lon, double geo_lat, double *utm_e, double *utm_n) {
   PJ_COORD xyzSrc = proj_coord(geo_lon, geo_lat, 0.0, HUGE_VAL);
@@ -249,8 +359,8 @@ int to_utm(PJ *_geo2utm, double geo_lon, double geo_lat, double *utm_e, double *
      fprintf(stderr, "Proj error: %s\n", proj_context_errno_string(PJ_DEFAULT_CTX, err));
      return 1;
   }
-  *utm_e = xyzDest.xyzt.x;
-  *utm_n = xyzDest.xyzt.y;
+  *utm_e = xyzDest.xy.x;
+  *utm_n = xyzDest.xy.y;
   return err;
 }
 
@@ -287,13 +397,6 @@ void lld_to_en(KDVec2 *enu, KDlld *lld, int lldindex, PJ *_geo2utm) {
 
     enu->lldindex = lldindex;  // index into the whole data stream
 }
-
-void xyz_to_en(KDVec2 *enu, KDVec3 *xyz) {
-    enu->utm_e = xyz->x;
-    enu->utm_n = xyz->y;
-    enu->lldindex = xyz->lldindex;  // index into the whole data stream
-}
-
 
 int cmp_vec2(const void *a, const void *b) {
     KDVec2 *p = (KDVec2 *)a;
@@ -377,8 +480,10 @@ void lldindex_to_idx(int offset, int nx, int ny, int *xidx, int *yidx, int *zidx
   *xidx = rem % nx;
 }
 
-int idx_to_lldindex(int nx, int ny, int xidx, int yidx, int zidx) {
+int idx_to_lldindex(int nx, int ny, int nz, int xidx, int yidx, int zidx) {
   int offset =(zidx)*(ny * nx)+(yidx)*(nx)+xidx;
+  if(offset > nx*ny*nz)
+    return -1;
   return offset;
 }
 
@@ -394,3 +499,79 @@ KDVec3 *find_xyz_by_lldindex(KDVec3 *xyz, int n, int target){
   }
   return NULL;
 }
+
+void print_latlon_by_lldindex(KDlld *pnts,int target) {
+  KDlld item=pnts[target];
+  fprintf(stderr,"%d: %lf %lf %lf\n",target,item.lon, item.lat, item.depth);
+}
+
+
+/********************* tetrahedral **************************/
+/*
+ * Build tetrahedra from a structured grid.
+ *
+ * nx, ny, nz: number of grid nodes in each direction
+ * out_tets: returned tetrahedra array (caller frees)
+ * out_ntets: number of tetrahedra returned
+ *
+ * Each hexahedral cell is split into 6 tetrahedra along diagonal v0-v7:
+ *
+ *   v0 = (x,   y,   z)
+ *   v1 = (x+1, y,   z)
+ *   v2 = (x,   y+1, z)
+ *   v3 = (x+1, y+1, z)
+ *   v4 = (x,   y,   z+1)
+ *   v5 = (x+1, y,   z+1)
+ *   v6 = (x,   y+1, z+1)
+ *   v7 = (x+1, y+1, z+1)
+ */
+int build_tetrahedra_from_grid(int nx, int ny, int nz, KDTet **out_tets, int *out_ntets) {
+    if (!out_tets || !out_ntets || nx < 2 || ny < 2 || nz < 2) {
+        return -1;
+    }
+
+    size_t max_cells = (size_t)(nx - 1) * (size_t)(ny - 1) * (size_t)(nz - 1);
+    size_t max_tets  = max_cells * 6u;
+
+    KDTet *tets = (KDTet *)malloc(max_tets * sizeof(KDTet));
+    if (!tets) {
+        return -2;
+    }
+
+    int nt = 0;
+
+    for (int z = 0; z < nz - 1; ++z) {
+        for (int y = 0; y < ny - 1; ++y) {
+            for (int x = 0; x < nx - 1; ++x) {
+                int v0 = idx_to_lldindex(nx, ny, nz, x,     y,     z);
+                int v1 = idx_to_lldindex(nx, ny, nz, x + 1, y,     z);
+                int v2 = idx_to_lldindex(nx, ny, nz, x,     y + 1, z);
+                int v3 = idx_to_lldindex(nx, ny, nz, x + 1, y + 1, z);
+                int v4 = idx_to_lldindex(nx, ny, nz, x,     y,     z + 1);
+                int v5 = idx_to_lldindex(nx, ny, nz, x + 1, y,     z + 1);
+                int v6 = idx_to_lldindex(nx, ny, nz, x,     y + 1, z + 1);
+                int v7 = idx_to_lldindex(nx, ny, nz, x + 1, y + 1, z + 1);
+
+                /* no missing cells */
+
+                /* 6-tet decomposition of a cube */
+                tets[nt++] = (KDTet){{v0, v1, v3, v7}};
+                tets[nt++] = (KDTet){{v0, v3, v2, v7}};
+                tets[nt++] = (KDTet){{v0, v2, v6, v7}};
+                tets[nt++] = (KDTet){{v0, v6, v4, v7}};
+                tets[nt++] = (KDTet){{v0, v4, v5, v7}};
+                tets[nt++] = (KDTet){{v0, v5, v1, v7}};
+            }
+        }
+    }
+
+    /* shrink to actual size */
+    KDTet *shrunk = (KDTet *)realloc(tets, (size_t)nt * sizeof(KDTet));
+    if (shrunk != NULL) {
+        tets = shrunk;
+    }
+    *out_tets = tets;
+    *out_ntets = nt;
+    return 0;
+}
+

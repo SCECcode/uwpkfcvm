@@ -16,6 +16,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <math.h>
+#include <stdbool.h>
+
 
 #include "kdtree_util.h"
 #include "proj.h"
@@ -121,6 +123,9 @@ typedef struct uwpkfcvm_model_t {
         int v2hull_size;
         int zero_depth_cnt; // should be NX * NY                        
 
+	KDTet *tets;
+	int tets_cnt;
+
 } uwpkfcvm_model_t;
 
 // UCVM API Required Functions
@@ -170,6 +175,7 @@ void uwpkfcvm_read_interp_properties(uwpkfcvm_model_t *model, int index,
                         uwpkfcvm_properties_t *data, double lat, double lon, double depth);
 /** Attempts to malloc the model size in memory and read it in. */
 int uwpkfcvm_reading_model(uwpkfcvm_model_t *model);
+double uwpkfcvm_calculate_density(double vp);
 
 // from uwpkfcvm_util.c
 void setup_model(uwpkfcvm_model_t *model, int cnt);
@@ -179,5 +185,11 @@ int in_model(uwpkfcvm_model_t *model, double lat, double lon, double depth);
 int nearest_neighbor(uwpkfcvm_model_t *model, double lat, double lon, double depth, int total);
 double vs_by_offset(uwpkfcvm_model_t *model,int loc);
 double vp_by_offset(uwpkfcvm_model_t *model,int loc);
+
+// tetrahedral
+int interpolate_tetra_mesh(uwpkfcvm_model_t *model, uwpkfcvm_properties_t *data,
+            const KDVec3 *pts, int npts, const KDTet *tets, int ntets, KDVec3 p);
+double interp_cell_tets(KDVec3 q, KDVec3 p[8], double v[8], bool *ok);
+
 
 #endif // UWPKFCVM_H

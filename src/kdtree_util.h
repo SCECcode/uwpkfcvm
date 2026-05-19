@@ -33,9 +33,8 @@ typedef struct KDlld {
 } KDlld;
 
 // base on KDlld 
-// vpnts == in approximate utm
-// in utm + depth 3D space
-// where x is utm_e, y is utm_n, z is -depth
+// to x,y,z in ECEF coordinates
+// WGS84 constants
 typedef struct KDVec3 {
     double x;
     double y;
@@ -43,9 +42,9 @@ typedef struct KDVec3 {
     int lldindex;
 } KDVec3;
 
-// nodes
+// nodes -- make a copy of KDVec3 instead of a pointer
 typedef struct KDNode3 {
-    KDVec3 *point;
+    KDVec3 point;
     int axis;  // 0=x, 1=y, 2=z
     struct KDNode3 *left;
     struct KDNode3 *right;
@@ -70,8 +69,15 @@ typedef struct KDVec2 {
     int lldindex;
 } KDVec2;
 
+/* tetrahedron: 4 triangle faces, 6 edges, 4 verticies */
+typedef struct KDTet {
+    int v[4];
+} KDTet;
+
+
+
 /** access **/ 
-void lld_to_xyz(KDVec3 *vp, double lat, double lon, double depth, int lldidx, PJ *_geo2utm);
+void lld_to_xyz(KDVec3 *vp, double lat, double lon, double depth, int lldidx);
 void dump_v3pnts(KDVec3 *vp, int n);
 KDNode3* build_v3kdtree(KDVec3 *pts, int n, int depth);
 void free_v3kdtree(KDNode3 *node);
@@ -80,7 +86,9 @@ void write_flatten_v3kdtree(const char *fname, KDNode3Disk *nodes, int n);
 KDNode3Disk *read_flatten_v3kdtree(const char *fname, int n);
 
 void lld_to_en(KDVec2 *vp, KDlld *lld, int lldindex, PJ *_geo2utm);
-void xyz_to_en(KDVec2 *vp, KDVec3 *xyz);
+
+//void xyz_to_en(KDVec2 *vp, KDVec3 *xyz);
+
 void dump_v2pnts(KDVec2 *vp, int n);
 int create_boundary_hull(KDVec2 *pnts2, int n, KDVec2 **hull);
 
@@ -92,13 +100,18 @@ void find_xyz_latlon(KDlld *pnts, int lldindex, int nX, int nY);
 void find_latlon(KDlld *pnts, int lldindex);
 
 void lldindex_to_idx(int offset, int nx, int ny, int *xidx, int *yidx, int *zidx);
-int idx_to_lldindex(int nx, int ny, int xidx, int yidx, int zidx);
+int idx_to_lldindex(int nx, int ny, int nz, int xidx, int yidx, int zidx);
 KDVec3 *find_xyz_by_lldindex(KDVec3 *xyz, int n, int target);
-double dist_sq(KDVec3* a, KDVec3* b);
+void print_latlon_by_lldindex(KDlld *pnts,int target);
+double dist_sq(KDVec3* a, KDVec3* b); // x*x+y*y+z*z
+				      //
+/* tetrahedron */
+int build_tetrahedra_from_grid(int nx, int ny, int nz, KDTet **out_tets, int *out_ntets);
 
 /** usage **/
 void kdtree_nearest(KDNode3 *node, KDVec3* query, KDVec3 **best, double *best_dist, int recursive);
 int nearest_point(KDVec3 *points, int n, KDVec3 *query);
+int nearest_N_points(KDVec3 *points, int n, KDVec3 *query, int N, int *out_idx);
 int point_in_convex(KDVec2 *poly, int n, KDVec2 p);
 
 #endif // UWPKFCVM_H

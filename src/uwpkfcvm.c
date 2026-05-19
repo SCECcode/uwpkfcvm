@@ -17,7 +17,7 @@
 #include <assert.h>
 
 int uwpkfcvm_ucvm_debug_detail=0;
-int uwpkfcvm_ucvm_debug=0;
+int uwpkfcvm_ucvm_debug=1;
 FILE *stderrfp=NULL;
 
 /** The config of the model */
@@ -90,6 +90,7 @@ int uwpkfcvm_init(const char *dir, const char *label) {
     sprintf(uwpkfcvm_data_directory, "%s/model/%s/data/%s/", dir, label, uwpkfcvm_configuration->model_dir);
 
     // We need to convert the point from lat, lon to UTM, let's set it up.
+/* XXX */
     char uwpkfcvm_projstr[128];
     snprintf(uwpkfcvm_projstr, sizeof(uwpkfcvm_projstr), "+proj=utm +zone=%d +datum=NAD27 +units=m +no_defs", uwpkfcvm_configuration->utm_zone);
     PJ *_P = proj_create_crs_to_crs(PJ_DEFAULT_CTX, "EPSG:4326", uwpkfcvm_projstr, NULL);
@@ -99,6 +100,18 @@ int uwpkfcvm_init(const char *dir, const char *label) {
         return (UCVM_CODE_ERROR);
     }
     uwpkfcvm_geo2utm = proj_normalize_for_visualization(PJ_DEFAULT_CTX, _P);
+/* */
+/*
+    char epsg_code[32];
+    // WGS84 UTM north hemisphere
+    snprintf(epsg_code, sizeof(epsg_code), "EPSG:%d", 32600 + uwpkfcvm_configuration->utm_zone);
+    uwpkfcvm_geo2utm = proj_create_crs_to_crs( PJ_DEFAULT_CTX, "EPSG:4326", epsg_code, NULL);
+    if (!uwpkfcvm_geo2utm) {
+        fprintf(stderr, "ERROR: %s\n", proj_context_errno_string( PJ_DEFAULT_CTX, proj_context_errno(PJ_DEFAULT_CTX)));
+        return 1;
+    }
+    uwpkfcvm_geo2utm = proj_normalize_for_visualization( PJ_DEFAULT_CTX, uwpkfcvm_geo2utm);
+*/
 
 
     // Can we allocate the model, or parts of it, to memory. If so, we do.
@@ -249,40 +262,90 @@ double _interpolate_it(double *val, double *dist, int n, double power) {
 }
 
 //int idx_to_lldindex(int nx, int ny, int xidx, int yidx, int zidx);
-void uwpkfcvm_read_interp_properties(uwpkfcvm_model_t *model, int lldindex, uwpkfcvm_properties_t *data, double lat, double lon, double depth) {  
+//TOP 5 nearest neighbors distance weighting
+void uwpkfcvm_read_interp_properties_NEAREST(uwpkfcvm_model_t *model, int lldindex, uwpkfcvm_properties_t *data, double lat, double lon, double depth) {  
+    int top_sz=10;
     int nx=model->nx;
     int ny=model->ny;
-    int nz=model->ny;
+    int nz=model->nz;
     int sz=model->pnts_size;
     KDVec3 *xyz=model->v3pnts;
     KDVec3 query_xyz;
 
-    lld_to_xyz(&query_xyz, lat, lon, depth, 0/* don't care */, uwpkfcvm_geo2utm);
+    lld_to_xyz(&query_xyz, lat, lon, depth, -1/* don't care */);
     
     int xidx, yidx, zidx; // starting index
     lldindex_to_idx(lldindex, nx, ny, &xidx, &yidx, &zidx);
 
-    int *offset = (int *) malloc(8 * sizeof(int));
-    double *dist= (double *) malloc(8 * sizeof(double));
-    double *vs= (double *) malloc(8 * sizeof(double));
-    double *vp= (double *) malloc(8 * sizeof(double));
+    int *offset = (int *) malloc(top_sz * sizeof(int));
+    double *dist= (double *) malloc(top_sz * sizeof(double));
+    double *vs= (double *) malloc(top_sz * sizeof(double));
+    double *vp= (double *) malloc(top_sz * sizeof(double));
 
-    offset[0] = idx_to_lldindex(nx,ny,xidx,yidx,zidx);      // x,    y, z
-    offset[1] = idx_to_lldindex(nx,ny,xidx+1,yidx,zidx);    // x+1,  y, z
-    offset[2] = idx_to_lldindex(nx,ny,xidx,yidx+1,zidx);    // x,  y+1, z
-    offset[3] = idx_to_lldindex(nx,ny,xidx+1,yidx+1,zidx);  // x+1,y+1, z
-    offset[4] = idx_to_lldindex(nx,ny,xidx,yidx,zidx+1);    // x,    y, z+1
-    offset[5] = idx_to_lldindex(nx,ny,xidx+1,yidx,zidx+1);  // x+1,  y, z+1
-    offset[6] = idx_to_lldindex(nx,ny,xidx,yidx+1,zidx+1);  // x,  y+1, z+1
-    offset[7] = idx_to_lldindex(nx,ny,xidx+1,yidx+1,zidx+1);// x+1,y+1, z+1
+    nearest_N_points(xyz, sz, &query_xyz, top_sz, offset);
 
-    for(int i=0; i<8; i++) {
+    for(int i=0; i<top_sz; i++) {
       vs[i]=vs_by_offset(model, offset[i]);
       vp[i]=vp_by_offset(model, offset[i]);
       dist[i]=dist_sq(&query_xyz, find_xyz_by_lldindex(xyz,sz,offset[i]));
     }
 
     int power=1.0; // or 1.0
+    double vs_final=_interpolate_it(vs, dist, top_sz, power);
+    double vp_final=_interpolate_it(vp, dist, top_sz, power);
+
+    if(uwpkfcvm_ucvm_debug) {
+       fprintf(stderrfp, "interp..vs before %lf after %lf\n", vs[0], vs_final);
+       fprintf(stderrfp, "interp..vp before %lf after %lf\n", vp[0], vp_final);
+    }
+
+    data->vs=vs_final;
+    data->vp=vp_final;
+    /* Calculate density */
+    if (data->vp > 0.0) { data->rho=uwpkfcvm_calculate_density(data->vp); }
+
+    free(dist);
+    free(offset);
+    free(vs);
+    free(vp);
+}
+
+// 8 nearest cells -iwd inverse distance weighting
+void uwpkfcvm_read_interp_properties_IWD(uwpkfcvm_model_t *model, int lldindex, uwpkfcvm_properties_t *data, double lat, double lon, double depth) {  
+    int nx=model->nx;
+    int ny=model->ny;
+    int nz=model->nz;
+    int sz=model->pnts_size;
+    KDVec3 *xyz=model->v3pnts;
+    KDVec3 query_xyz;
+    double power=1.0; // or 1.0
+
+    lld_to_xyz(&query_xyz, lat, lon, depth, -1/* don't care */);
+    
+    int xidx, yidx, zidx; // starting index
+    lldindex_to_idx(lldindex, nx, ny, &xidx, &yidx, &zidx);
+
+    int *offset = (int *) malloc(8 * sizeof(int));
+    double *dist= (double *) malloc(8 * sizeof(double));
+    double *w= (double *) malloc(8 * sizeof(double));
+    double *vs= (double *) malloc(8 * sizeof(double));
+    double *vp= (double *) malloc(8 * sizeof(double));
+
+    offset[0] = idx_to_lldindex(nx,ny,nz,xidx,yidx,zidx);      // x,    y, z
+    offset[1] = idx_to_lldindex(nx,ny,nz,xidx+1,yidx,zidx);    // x+1,  y, z
+    offset[2] = idx_to_lldindex(nx,ny,nz,xidx,yidx+1,zidx);    // x,  y+1, z
+    offset[3] = idx_to_lldindex(nx,ny,nz,xidx+1,yidx+1,zidx);  // x+1,y+1, z
+    offset[4] = idx_to_lldindex(nx,ny,nz,xidx,yidx,zidx+1);    // x,    y, z+1
+    offset[5] = idx_to_lldindex(nx,ny,nz,xidx+1,yidx,zidx+1);  // x+1,  y, z+1
+    offset[6] = idx_to_lldindex(nx,ny,nz,xidx,yidx+1,zidx+1);  // x,  y+1, z+1
+    offset[7] = idx_to_lldindex(nx,ny,nz,xidx+1,yidx+1,zidx+1);// x+1,y+1, z+1
+
+    for(int i=0; i<8; i++) {
+      vs[i]=vs_by_offset(model, offset[i]);
+      vp[i]=vp_by_offset(model, offset[i]);
+      dist[i]=sqrt(dist_sq(&query_xyz, find_xyz_by_lldindex(xyz,sz,offset[i])));
+    }
+
     double vs_final=_interpolate_it(vs, dist, 8, power);
     double vp_final=_interpolate_it(vp, dist, 8, power);
 
@@ -300,6 +363,85 @@ void uwpkfcvm_read_interp_properties(uwpkfcvm_model_t *model, int lldindex, uwpk
     free(offset);
     free(vs);
     free(vp);
+}
+
+// USING Tetrahedral method
+void uwpkfcvm_read_interp_properties_TET1(uwpkfcvm_model_t *model, int lldindex, 
+		uwpkfcvm_properties_t *data, double lat, double lon, double depth) {
+
+    int nx=model->nx;
+    int ny=model->ny;
+    int nz=model->nz;
+    int sz=model->pnts_size;
+    KDVec3 *xyz=model->v3pnts;
+    KDVec3 query_xyz;
+    KDTet *tets=model->tets;
+    int tsz=model->tets_cnt;
+
+    lld_to_xyz(&query_xyz, lat, lon, depth, -1/* don't care */);
+
+    //int xidx, yidx, zidx; // starting index
+    //lldindex_to_idx(lldindex, nx, ny, &xidx, &yidx, &zidx);
+
+    int rc=interpolate_tetra_mesh(model, data, xyz, sz, tets, tsz, query_xyz);
+    if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp, "in tetdral.. %d\n",rc); }
+}
+
+
+
+
+void uwpkfcvm_read_interp_properties(uwpkfcvm_model_t *model, int lldindex,
+                                     uwpkfcvm_properties_t *data,
+                                     double lat, double lon, double depth)
+{
+    int nx = model->nx;
+    int ny = model->ny;
+    int nz = model->nz; 
+    int sz = model->pnts_size;
+
+    KDVec3 *xyz = model->v3pnts;
+    KDVec3 query_xyz;
+
+    lld_to_xyz(&query_xyz, lat, lon, depth, -1);
+
+    int xidx, yidx, zidx;
+    lldindex_to_idx(lldindex, nx, ny, &xidx, &yidx, &zidx);
+
+    int offset[8];
+    offset[0] = idx_to_lldindex(nx, ny, nz, xidx,     yidx,     zidx);
+    offset[1] = idx_to_lldindex(nx, ny, nz, xidx + 1, yidx,     zidx);
+    offset[2] = idx_to_lldindex(nx, ny, nz, xidx,     yidx + 1, zidx);
+    offset[3] = idx_to_lldindex(nx, ny, nz, xidx + 1, yidx + 1, zidx);
+    offset[4] = idx_to_lldindex(nx, ny, nz, xidx,     yidx,     zidx + 1);
+    offset[5] = idx_to_lldindex(nx, ny, nz, xidx + 1, yidx,     zidx + 1);
+    offset[6] = idx_to_lldindex(nx, ny, nz, xidx,     yidx + 1, zidx + 1);
+    offset[7] = idx_to_lldindex(nx, ny, nz, xidx + 1, yidx + 1, zidx + 1);
+
+    KDVec3 p[8];
+    double vs[8];
+    double vp[8];
+
+    for (int i = 0; i < 8; ++i) {
+        p[i]  = *find_xyz_by_lldindex(xyz, sz, offset[i]);
+        vs[i] = vs_by_offset(model, offset[i]);
+        vp[i] = vp_by_offset(model, offset[i]);
+    }
+
+    bool ok_vs = false;
+    bool ok_vp = false;
+
+    data->vs = interp_cell_tets(query_xyz, p, vs, &ok_vs);
+    data->vp = interp_cell_tets(query_xyz, p, vp, &ok_vp);
+
+    if (!ok_vs || !ok_vp) {
+        /* fallback if query is outside the cell or the cell is degenerate */
+        data->vs = NAN;
+        data->vp = NAN;
+    }
+
+    if (data->vp > 0.0) {
+        data->rho = uwpkfcvm_calculate_density(data->vp);
+    }
 }
 
 /**

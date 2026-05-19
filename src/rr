@@ -1,0 +1,15 @@
+
+ucvm_query -m uwpkfcvm -f $UCVM_INSTALL_PATH/conf/ucvm.conf -l 36.6022,-120.337200,0
+#ucvm_query -m uwpkfcvm -f $UCVM_INSTALL_PATH/conf/ucvm.conf -l 35.5619,-120.8595,0
+#ucvm_query -m uwpkfcvm -f $UCVM_INSTALL_PATH/conf/ucvm.conf -l 36.725,-116.905,0
+#ucvm_query -m albacore -f $UCVM_INSTALL_PATH/conf/ucvm.conf -l 36.725,-116.905,0
+#ucvm_query -m albacore -f $UCVM_INSTALL_PATH/conf/ucvm.conf -l 35.1205,-120.5634,1000.0
+
+#..nearest_neighbor to target => lon(-120.563400) lat(35.120500) depth(1000.000000)
+#SEARCH with kdtree_nearest 
+#     >>>main: kdtree_nearest, best lldindex(1080), best dist(2502.230901)
+#  -120.557570 35.100350 9000.000000
+#SEARCH with brute force 
+#    ==CALLING nearest_point ==
+#     >>>main: nearest_point,  best lldindex(2160)
+#  -120.557570 35.100350 28000.000000

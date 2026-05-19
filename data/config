@@ -55,7 +55,7 @@ top_left_corner_n = 3977003.574811
 top_right_corner_e = 740631.667661
 top_right_corner_n = 4062734.743951
 
-## bilinear or trilinear interpolation
+## interpolation
 interpolation = on 
 
 # Seek method, fast-X or fast-Y

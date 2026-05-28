@@ -1,11 +1,11 @@
 # Autoconf/automake file
 
 # General compiler/linker flags
-AM_CFLAGS = ${CFLAGS} ${CPPFLAGS} ${PROJ_INCLUDES} ${PROJ_INCLUDES}
-AM_LDFLAGS = ${LDFLAGS} ${PROJ_LDFLAGS} ${LIBS} ${PROJ_LDFLAGS} -lm
+AM_CFLAGS = ${CFLAGS} ${PROJ_INCLUDES}
+AM_LDFLAGS = ${LDFLAGS} ${PROJ_LDFLAGS}
 
 
-TARGETS = libuwpkfcvm.a libuwpkfcvm.so uwpkfcvm_query 
+TARGETS = libuwpkfcvm.a libuwpkfcvm.so uwpkfcvm_query
 
 all: $(TARGETS)
 
@@ -35,7 +35,7 @@ uwpkfcvm_query.o: uwpkfcvm_query.c
 
 uwpkfcvm_query : uwpkfcvm_query.o libuwpkfcvm.a
 	$(CC) -o $@ $^ $(AM_LDFLAGS) -lm
-
+	
 clean:
 	rm -rf $(TARGETS)
 	rm -rf *.o 

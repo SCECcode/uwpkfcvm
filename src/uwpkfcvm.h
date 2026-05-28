@@ -7,6 +7,8 @@
  * base on original uwpkfcvm
  *
  */
+#ifndef UWPKFCVM_H
+#define UWPKFCVM_H
 
 // Includes
 #include <stdio.h>
@@ -14,13 +16,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <math.h>
+#include <stdbool.h>
 
+
+#include "kdtree_util.h"
 #include "proj.h"
 
 // Constants
 #ifndef M_PI
-	/** Defines pi */
-	#define M_PI 3.14159265358979323846
+        /** Defines pi */
+        #define M_PI 3.14159265358979323846
 #endif
 #define DEG_TO_RAD M_PI / 180.0
 
@@ -35,90 +40,92 @@
 // Structures
 /** Defines a point (latitude, longitude, and depth) in WGS84 format */
 typedef struct uwpkfcvm_point_t {
-	/** Longitude member of the point */
-	double longitude;
-	/** Latitude member of the point */
-	double latitude;
-	/** Depth member of the point */
-	double depth;
+        /** Longitude member of the point */
+        double longitude;
+        /** Latitude member of the point */
+        double latitude;
+        /** Depth member of the point */
+        double depth;
 } uwpkfcvm_point_t;
 
 /** Defines the material properties this model will retrieve. */
 typedef struct uwpkfcvm_properties_t {
-	/** P-wave velocity in meters per second */
-	double vp;
-	/** S-wave velocity in meters per second */
-	double vs;
-	/** Density in g/m^3 */
-	double rho;
-	/** Qp */
-	double qp;
-	/** Qs */
-	double qs;
+        /** P-wave velocity in meters per second */
+        double vp;
+        /** S-wave velocity in meters per second */
+        double vs;
+        /** Density in g/m^3 */
+        double rho;
+        /** Qp */
+        double qp;
+        /** Qs */
+        double qs;
 } uwpkfcvm_properties_t;
 
 /** The CVM-S5 configuration structure. */
 typedef struct uwpkfcvm_configuration_t {
-	/** The zone of UTM projection */
-	int utm_zone;
-	/** The model directory */
-	char model_dir[128];
-	/** Number of x points */
-	int nx;
-	/** Number of y points */
-	int ny;
-	/** Number of z points */
-	int nz;
-	/** Depth in meters */
-	double depth;
-	/** Top left corner easting in UTM projection */
-	double top_left_corner_e;
-	/** Top left corner northing in UTM projection */
-	double top_left_corner_n;
-	/** Top right corner easting in UTM projection */
-	double top_right_corner_e;
-	/** Top right corner northing in UTM projection */
-	double top_right_corner_n;
-	/** Bottom left corner easting in UTM projection */
-	double bottom_left_corner_e;
-	/** Bottom left corner northing in UTM projection */
-	double bottom_left_corner_n;
-	/** Bottom right corner easting in UTM projection */
-	double bottom_right_corner_e;
-	/** Bottom right corner northing in UTM projection */
-	double bottom_right_corner_n;
-	/** Z interval for the data */
-	double depth_interval;
+        /** The zone of UTM projection */
+        int utm_zone;
+        /** The model directory */
+        char model_dir[128];
+        /** Number of x points */
+        int nx;
+        /** Number of y points */
+        int ny;
+        /** Number of z points */
+        int nz;
+        /** Depth in meters */
+        double depth;
+        /** Top left corner easting in UTM projection */
+        double top_left_corner_e;
+        /** Top left corner northing in UTM projection */
+        double top_left_corner_n;
+        /** Top right corner easting in UTM projection */
+        double top_right_corner_e;
+        /** Top right corner northing in UTM projection */
+        double top_right_corner_n;
+        /** Bottom left corner easting in UTM projection */
+        double bottom_left_corner_e;
+        /** Bottom left corner northing in UTM projection */
+        double bottom_left_corner_n;
+        /** Bottom right corner easting in UTM projection */
+        double bottom_right_corner_e;
+        /** Bottom right corner northing in UTM projection */
+        double bottom_right_corner_n;
         /** The data access seek method, fast-X, or fast-Y */
         char seek_axis[128];
         /** The data seek direction, bottom-up, or top-down */
         char seek_direction[128];
         /** trilinear interploation; */
         int interpolation;
+        /** add 1d model using nearest boundary points */
+        int add_1d_background;
 } uwpkfcvm_configuration_t;
 
 /** The model structure which points to available portions of the model. */
 typedef struct uwpkfcvm_model_t {
-	/** A pointer to the Vs data either in memory or disk. Null if does not exist. */
-	void *vs;
-	/** Vs status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int vs_status;
-	/** A pointer to the Vp data either in memory or disk. Null if does not exist. */
-	void *vp;
-	/** Vp status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int vp_status;
-	/** A pointer to the rho data either in memory or disk. Null if does not exist. */
-	void *rho;
-	/** Rho status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int rho_status;
-	/** A pointer to the Qp data either in memory or disk. Null if does not exist. */
-	void *qp;
-	/** Qp status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int qp_status;
-	/** A pointer to the Qs data either in memory or disk. Null if does not exist. */
-	void *qs;
-	/** Qs status: 0 = not found, 1 = found and not in memory, 2 = found and in memory */
-	int qs_status;
+        KDlld *pnts;       // raw model data
+        int *pnts_zero_depth; // track which pnts has depth/z = 0
+        int pnts_size;   
+        int nx;
+        int ny;
+        int nz;
+                              
+        KDVec3 *v3pnts;    // x,y,z
+        KDNode3 *v3nodes;  // tree v3nodes for vec3
+
+        KDVec2 *v2pnts; // utm_e, utm_n, just 1 layer 
+        KDVec2 *v2pnts_boundary;
+        int boundary_size;
+
+        KDVec2 *v2hull;
+
+        int v2hull_size;
+        int zero_depth_cnt; // should be NX * NY                        
+
+	KDTet *tets;
+	int tets_cnt;
+
 } uwpkfcvm_model_t;
 
 // UCVM API Required Functions
@@ -162,15 +169,27 @@ int uwpkfcvm_dump_configuration(uwpkfcvm_configuration_t *config);
 /** Prints out the error string. */
 void uwpkfcvm_print_error(char *err);
 /** Retrieves the value at a specified grid point in the model. */
-void uwpkfcvm_read_properties(int x, int y, int z, uwpkfcvm_properties_t *data);
+void uwpkfcvm_read_properties2(int x, int y, int z, uwpkfcvm_properties_t *data);
+void uwpkfcvm_read_properties(uwpkfcvm_model_t *model, int index, uwpkfcvm_properties_t *data);
+void uwpkfcvm_read_interp_properties(uwpkfcvm_model_t *model, int index,
+                        uwpkfcvm_properties_t *data, double lat, double lon, double depth);
 /** Attempts to malloc the model size in memory and read it in. */
-int uwpkfcvm_try_reading_model(uwpkfcvm_model_t *model);
+int uwpkfcvm_reading_model(uwpkfcvm_model_t *model);
+double uwpkfcvm_calculate_density(double vp);
 
-// Interpolation Functions
-/** Linearly interpolates two uwpkfcvm_properties_t structures */
-void uwpkfcvm_linear_interpolation(double percent, uwpkfcvm_properties_t *x0, uwpkfcvm_properties_t *x1, uwpkfcvm_properties_t *ret_properties);
-/** Bilinearly interpolates the properties. */
-void uwpkfcvm_bilinear_interpolation(double x_percent, double y_percent, uwpkfcvm_properties_t *four_points, uwpkfcvm_properties_t *ret_properties);
-/** Trilinearly interpolates the properties. */
-void uwpkfcvm_trilinear_interpolation(double x_percent, double y_percent, double z_percent, uwpkfcvm_properties_t *eight_points,
-							 uwpkfcvm_properties_t *ret_properties);
+// from uwpkfcvm_util.c
+void setup_model(uwpkfcvm_model_t *model, int cnt);
+void free_model(uwpkfcvm_model_t *model);
+void load_model(uwpkfcvm_model_t *model, int NX, int NY, int NZ, FILE *fp);
+int in_model(uwpkfcvm_model_t *model, double lat, double lon, double depth);
+int nearest_neighbor(uwpkfcvm_model_t *model, double lat, double lon, double depth, int total);
+double vs_by_offset(uwpkfcvm_model_t *model,int loc);
+double vp_by_offset(uwpkfcvm_model_t *model,int loc);
+
+// tetrahedral
+int interpolate_tetra_mesh(uwpkfcvm_model_t *model, uwpkfcvm_properties_t *data,
+            const KDVec3 *pts, int npts, const KDTet *tets, int ntets, KDVec3 p);
+double interp_cell_tets(KDVec3 q, KDVec3 p[8], double v[8], bool *ok);
+
+
+#endif // UWPKFCVM_H

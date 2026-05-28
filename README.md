@@ -26,6 +26,14 @@ doi: 10.1093/gji/ggw217
 This package is intended to be installed as part of the UCVM framework,
 version 25.7 or higher.
 
+<pre>
+aclocal -I m4
+autoconf
+automake --add-missing --force-missing
+
+./configure --prefix=$UCVM_INSTALL_PATH/model/uwpkfcvm --with-proj-libdir=$UCVM_INSTALL_PATH/lib/proj/lib --with-proj-incdir=$UCVM_INSTALL_PATH/lib/proj/include --with-tiff-libdir=$UCVM_INSTALL_PATH/lib/tiff/lib --with-tiff-incdir=$UCVM_INSTALL_PATH/lib/tiff/include --with-sqlite-libdir=$UCVM_INSTALL_PATH/lib/sqlite/lib --with-sqlite-incdir=$UCVM_INSTALL_PATH/lib/sqlite/include
+</pre>
+
 ## Contact the authors
 
 If you would like to contact the authors regarding this software,

@@ -1,5 +1,4 @@
-##./build_kdtree 4 kdtree_surface.in kdtree_surface_flat.bin
 
-make
+#ucvm_query -m uwpkfcvm -f $UCVM_INSTALL_PATH/conf/ucvm.conf -l 35.8,-120,0
 
-./query_nearest_kdtree 2430 ../data/uwpkfcvm/parkfield.txt kdtree_query.in
+plot_horizontal_slice.py -d vs -c uwpkfcvm -s 0.01 -a sd -o uwpkfcvm.png -n $UCVM_INSTALL_PATH/conf/ucvm.conf -i $UCVM_INSTALL_PATH -b 35.1682,-121.4553 -u 36.5688,-119.4948 -e 3000 -A 1.5,3.5

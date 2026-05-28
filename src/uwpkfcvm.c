@@ -68,7 +68,6 @@ int uwpkfcvm_init(const char *dir, const char *label) {
       fprintf(stderrfp," ===== START ===== \n");
     }
 
-
     // Initialize variables.
     uwpkfcvm_configuration = calloc(1, sizeof(uwpkfcvm_configuration_t));
     uwpkfcvm_velocity_model = calloc(1, sizeof(uwpkfcvm_model_t));
@@ -107,10 +106,25 @@ int uwpkfcvm_init(const char *dir, const char *label) {
         return (UCVM_CODE_ERROR);
     }
 
+    // Calculate the rotation angle of the box.
+    assert(uwpkfcvm_configuration);
+    north_height_m = uwpkfcvm_configuration->top_left_corner_n - uwpkfcvm_configuration->bottom_left_corner_n;
+    east_width_m = uwpkfcvm_configuration->top_left_corner_e - uwpkfcvm_configuration->bottom_left_corner_e;
+
+    // Rotation angle. Cos, sin, and tan are expensive computationally, so calculate once.
+    rotation_angle = atan(east_width_m / north_height_m);
+
+    uwpkfcvm_cos_rotation_angle = cos(rotation_angle);
+    uwpkfcvm_sin_rotation_angle = sin(rotation_angle);
+
+    uwpkfcvm_total_height_m = sqrt(pow(uwpkfcvm_configuration->top_left_corner_n - uwpkfcvm_configuration->bottom_left_corner_n, 2.0f) +
+                              pow(uwpkfcvm_configuration->top_left_corner_e - uwpkfcvm_configuration->bottom_left_corner_e, 2.0f));
+    uwpkfcvm_total_width_m = sqrt(pow(uwpkfcvm_configuration->top_right_corner_n - uwpkfcvm_configuration->top_left_corner_n, 2.0f) +
+                             pow(uwpkfcvm_configuration->top_right_corner_e - uwpkfcvm_configuration->top_left_corner_e, 2.0f));
+
     // setup config_string 
     sprintf(uwpkfcvm_config_string,"config = %s\n",configbuf);
     uwpkfcvm_config_sz=1;
-
 
     // Let everyone know that we are initialized and ready for business.
     uwpkfcvm_is_initialized = 1;
@@ -187,16 +201,16 @@ int uwpkfcvm_query(uwpkfcvm_point_t *points, uwpkfcvm_properties_t *data, int nu
 	// lon,lat,u,v			     
 	to_utm(points[i].longitude, points[i].latitude, &point_u, &point_v);
 
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   left_e %lf left_n %lf\n", 
+if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   model: left_e %lf left_n %lf\n", 
                       uwpkfcvm_configuration->bottom_left_corner_e, uwpkfcvm_configuration->bottom_left_corner_n); }
 
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   lon %lf lat %lf\n", points[i].longitude, points[i].latitude); }
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"   point_u %lf point_v %lf\n", point_u, point_v); }
+if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"query:   lon %lf lat %lf\n", points[i].longitude, points[i].latitude); }
+if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"query:   point_u %lf point_v %lf\n", point_u, point_v); }
 
         // Point within rectangle.
         point_u -= uwpkfcvm_configuration->bottom_left_corner_e;
         point_v -= uwpkfcvm_configuration->bottom_left_corner_n;
-if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"2  point_u %lf point_v %lf\n", point_u, point_v); }
+if(uwpkfcvm_ucvm_debug) { fprintf(stderrfp,"offset from left pnt:  point_u %lf point_v %lf\n", point_u, point_v); }
 
         // We need to rotate that point, the number of degrees we calculated above.
         point_x = uwpkfcvm_cos_rotation_angle * point_u - uwpkfcvm_sin_rotation_angle * point_v;

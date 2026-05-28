@@ -3,14 +3,12 @@
 ##
 #  Builds the data files in the expected format from 
 #
-# from >> XX??  YY?? depth(KM) Latitude Longitude  Vp/Vs (km/s)
-#         -65.0 -70.0   0.0    35.10035 -120.55757 3.17
+# from >> XX??  YY?? depth(KM) Vp/Vs (km/s)
+#         -65.0 -70.0  0.0  3.17
 #
-# with varying depth
+# create binary vp.dat and vs.dat
 #
-## Origin and Rotate Angle(anticlockwise):35.960 -120.505 -40.00
 ## create a combined vs/vp and no density file(to be calculated)
-
 
 import getopt
 import sys
@@ -126,46 +124,62 @@ def main():
     # Now we need to go through the data files and put them in the correct
     # format. More specifically, we need a vp.dat
 
-    fvp = open("./parkfield_vptable.txt", "r")
-    fvs = open("./parkfield_vstable.txt", "r")
-    f_out = open("uwpkfcvm/parkfield.txt", "w")
+    fvp = open("./uwpkfcvm_vp.txt", "r")
+    fvs = open("./uwpkfcvm_vs.txt", "r")
+    fvp_out = open("uwpkfcvm/vp.dat", "wb")
+    fvs_out = open("uwpkfcvm/vs.dat", "wb")
+
+    vp_arr = array.array('f', (-1.0,) * (dimension_x * dimension_y * dimension_z))
+    vs_arr = array.array('f', (-1.0,) * (dimension_x * dimension_y * dimension_z))
 
     data_total_cnt=0
-    vp_nan_cnt=0
-    vs_nan_cnt=0
-
+    x_pos=0
+    y_pos=0
+    z_pos=0
     for vpline, vsline in zip(fvp, fvs):
-        arr_vp = vpline.split()
-        arr_vs = vsline.split()
+        in_vp = vpline.split()
+        in_vs = vsline.split()
 
-        skip_x = float(arr_vp[0])
-        skip_y = float(arr_vp[1])
-        in_z = float(arr_vp[2])
-        in_lat = float(arr_vp[3])
-        in_lon = float(arr_vp[4])
+        skip_x = (in_vp[0])
+        skip_y = (in_vp[1])
+        val_z = float(in_vp[2])
+        val_vp = float(in_vp[3])
 
-        tmp = arr_vp[5]
-        if( tmp != "NaN" ) :
-           in_vp = float(tmp)
-           in_vp = in_vp * 1000.0;
-        else:
-           vp_nan_cnt = vp_nan_cnt + 1
+        skip_x = (in_vs[0])
+        skip_y = (in_vs[1])
+        val_z = float(in_vs[2])
+        val_vs = float(in_vs[3])
 
-        tmp = arr_vs[5]
-        if( tmp != "NaN" ) :
-           in_vs = float(tmp)
-           in_vs = in_vs * 1000.0;
-        else:
-           vs_nan_cnt = vs_nan_cnt + 1
+        val_vp = val_vp * 1000.0
+        val_vs = val_vs * 1000.0
+        val_z = val_z * 1000.0
 
-        data_total_cnt = data_total_cnt + 1
+        loc = z_pos * (dimension_y * dimension_x) + (y_pos * dimension_x) + x_pos
+        vp_arr[loc]=val_vp
+        vs_arr[loc]=val_vs
 
-#-123.267 39.3481 0 763.174 2087.571 1957.221
-        f_out.write("%lf %lf %lf %lf %lf\n" % (in_lon,in_lat,in_z,in_vs,in_vp))
+        if (data_total_cnt < 5) :
+           print("%d : %lf %lf %lf\n" % (loc, val_vp, val_vs, val_z))
+        data_total_cnt=data_total_cnt+1
+
+        x_pos = x_pos + 1
+        if(x_pos == dimension_x) :
+          x_pos = 0;
+          y_pos = y_pos+1
+          if(y_pos == dimension_y) :
+            y_pos=0;
+            z_pos = z_pos+1
+            if(z_pos == dimension_z) :
+              print ("All DONE")
+
+
+    vp_arr.tofile(fvp_out)
+    vs_arr.tofile(fvs_out)
 
     fvp.close()
     fvs.close()
-    f_out.close()
+    fvp_out.close()
+    fvs_out.close()
     print("Done! total data cnt = %d"%data_total_cnt)
 
 

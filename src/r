@@ -1,4 +1,4 @@
 
 #ucvm_query -m uwpkfcvm -f $UCVM_INSTALL_PATH/conf/ucvm.conf -l 35.8,-120,0
 
-plot_horizontal_slice.py -d vs -c uwpkfcvm -s 0.01 -a sd -o uwpkfcvm.png -n $UCVM_INSTALL_PATH/conf/ucvm.conf -i $UCVM_INSTALL_PATH -b 35.1682,-121.4553 -u 36.5688,-119.4948 -e 3000 -A 1.5,3.5
+plot_horizontal_slice.py -d vp -c uwpkfcvm -s 0.01 -a sd -o test.png -n $UCVM_INSTALL_PATH/conf/ucvm.conf -i $UCVM_INSTALL_PATH -b 35.1682,-121.4553 -u 36.5688,-119.4948 -e 4000 -A 3.0,6.0 

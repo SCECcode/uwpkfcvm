@@ -110,8 +110,6 @@ if test "$install_proj" = yes ; then
     if test "$with_sqlite_libdir" != no; then
       SQLITE3_LDFLAGS="-L$with_sqlite_libdir"
     fi
-    SCEC_SQLITE3_HEADER
-    SCEC_SQLITE3_LIB
   fi
   AC_SUBST(SQLITE3_INCLUDES)
   AC_SUBST(SQLITE3_LDFLAGS)
@@ -127,8 +125,6 @@ if test "$install_proj" = yes ; then
     if test "$with_tiff_libdir" != no; then
       TIFF_LDFLAGS="-L$with_tiff_libdir"
     fi
-    SCEC_TIFF_HEADER
-    SCEC_TIFF_LIB
   fi
   AC_SUBST(TIFF_INCLUDES)
   AC_SUBST(TIFF_LDFLAGS)

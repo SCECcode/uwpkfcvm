@@ -99,8 +99,6 @@ typedef struct uwpkfcvm_configuration_t {
         char seek_direction[128];
         /** trilinear interploation; */
         int interpolation;
-        /** add 1d model using nearest boundary points */
-        int add_1d_background;
 } uwpkfcvm_configuration_t;
 
 

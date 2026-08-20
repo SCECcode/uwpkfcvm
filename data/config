@@ -9,11 +9,6 @@ model_data_path  = https://g-3a9041.a78b8.36fe.data.globus.org/ucvm/models
 nx = 66
 ny = 71
 nz = 15 
-## original data,
-## x index from -65 to 65 without 0 (step = 2)
-## y index from -70 to 70 with 0 cell (step = 2)
-## z index from 0 to 28 (step = 2)
-## one layer is 4686 points
 
 # Depth, in meters
 # NOTE: 0 km is ~ sea level and 28 km depth is 28 km below sea level.
@@ -78,6 +73,4 @@ interpolation = off
 # Seek method, fast-X or fast-Y
 seek_axis = fast-X
 seek_direction = top-down
-
-add_1d_background = off
 

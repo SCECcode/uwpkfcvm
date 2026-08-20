@@ -10,20 +10,14 @@
 #
 ## create a combined vs/vp and no density file(to be calculated)
 
+
 import getopt
 import sys
+import shutil
 import subprocess
+import os
 import struct
 import array
-import ssl
-import certifi
-
-if sys.version_info.major >= (3) :
-  from urllib.request import urlopen
-else:
-  from urllib2 import urlopen
-
-## at UWPKFCVM/parkfield_vptable.txt and parkfield_vstable.txt
 
 model = "UWPKFCVM"
 
@@ -35,38 +29,40 @@ def usage():
     print("\n./make_data_files.py\n\n")
     sys.exit(0)
 
-def download_urlfile(url,fname):
-  print("\ndata file:",url,"\n")
-  try:
-    response = urlopen(url)
-    CHUNK = 16 * 1024
-    with open(fname, 'wb') as f:
-      while True:
-        chunk = response.read(CHUNK)
-        if not chunk:
-          break
-        f.write(chunk)
-  except:
-    e = sys.exc_info()[0]
-    print("Exception retrieving and saving model datafiles:",e)
-    raise
-  return True
+def download_urlfile(url, fname):
+    # Option 1A: aria2c tuned for slow/unstable connections
+    if shutil.which("aria2c"):
+        cmd = [
+            "aria2c",
+            "-x", "4",               # Limit to 4 connections (prevents network congestion)
+            "-s", "4",               # Split into 4 parts
+            "-c",                    # Always resume partial downloads
+            "--max-tries=0",         # Infinite retries if Wi-Fi drops
+            "--retry-wait=5",        # Wait 5 sec between retries
+            "-o", fname,
+            url
+        ]
+    # Option 1B: curl with resume fallback
+    elif shutil.which("curl"):
+        cmd = [
+            "curl",
+            "-L",                    # Follow redirects
+            "-C", "-",               # Resume automatically
+            "--retry", "999",        # Retry on failure
+            "--retry-delay", "5",
+            "-o", fname,
+            url
+        ]
+    else:
+        raise RuntimeError("Neither aria2c nor curl is installed.")
 
-def download_urlfile2(url, fname):
-    print("\ndata file:", url, "\n")
-    try:
-        context = ssl.create_default_context(cafile=certifi.where())
-        response = urlopen(url, context=context)
-        CHUNK = 16 * 1024
-        with open(fname, 'wb') as f:
-            while True:
-                chunk = response.read(CHUNK)
-                if not chunk:
-                  break
-                f.write(chunk)
-    except Exception as e:
-        print("Exception retrieving and saving model datafiles:", e)
-        raise
+    process = subprocess.run(cmd, check=True)
+# Check for success
+    if process.returncode == 0 and os.path.exists(fname):
+        print(f"\n[SUCCESS] Download completed! Proceeding with script...")
+        return True
+    else:
+        raise RuntimeError(f"Download failed with exit code {process.returncode}")
     return True
 
 
@@ -115,12 +111,15 @@ def main():
 
     fp.close()
 
-#    print("\nDownloading model file\n")
-#
-#    download_urlfile2(url,fname)
+## at UWPKFCVM/uwpkfcvm_vp.txt and uwpkfcvm_vs.txt
+    print("\nDownloading model file\n")
+
+    url=path+"/uwpkfcvm_vp.txt";
+    download_urlfile(url,"./uwpkfcvm_vp.txt")
+    url=path+"/uwpkfcvm_vs.txt";
+    download_urlfile(url,"uwpkfcvm_vs.txt")
 
     subprocess.check_call(["mkdir", "-p", mdir])
-
     # Now we need to go through the data files and put them in the correct
     # format. More specifically, we need a vp.dat
 

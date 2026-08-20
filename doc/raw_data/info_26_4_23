@@ -1,0 +1,13 @@
+Finally! I have two files, one for Vp, the other for Vs, structured identically. 
+I have not done any interpolation, just reformatted and added lat-lon coordinates 
+corresponding to each X-Y. Each line looks like this:
+
+-65.0 -70.0   0.0 35.10035 -120.55757  3.17
+
+X (km)     Y (km)         Z (km)     latitude          longitude                V (P or S)
+
+The coordinate system is defined this way:
+
+Origin and Rotate Angle(anticlockwise):35.960 -120.505 -40.00
+I hope you can deal with this without too much trouble. Let me know if you have any questions.
+

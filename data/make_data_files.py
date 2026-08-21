@@ -114,17 +114,22 @@ def main():
 ## at UWPKFCVM/uwpkfcvm_vp.txt and uwpkfcvm_vs.txt
     print("\nDownloading model file\n")
 
-    url=path+"/uwpkfcvm_vp.txt";
-    download_urlfile(url,"./uwpkfcvm_vp.txt")
-    url=path+"/uwpkfcvm_vs.txt";
-    download_urlfile(url,"uwpkfcvm_vs.txt")
+    try:
+        fvp = open('./uwpkfcvm_vp.txt','r')
+    except:
+        url=path+"/uwpkfcvm_vp.txt";
+        download_urlfile(url,"./uwpkfcvm_vp.txt")
 
-    subprocess.check_call(["mkdir", "-p", mdir])
+    try:
+        fvs = open('./uwpkfcvm_vs.txt','r')
+    except:
+        url=path+"/uwpkfcvm_vs.txt";
+        download_urlfile(url,"./uwpkfcvm_vs.txt")
+
     # Now we need to go through the data files and put them in the correct
     # format. More specifically, we need a vp.dat
+    subprocess.check_call(["mkdir", "-p", mdir])
 
-    fvp = open("./uwpkfcvm_vp.txt", "r")
-    fvs = open("./uwpkfcvm_vs.txt", "r")
     fvp_out = open("uwpkfcvm/vp.dat", "wb")
     fvs_out = open("uwpkfcvm/vs.dat", "wb")
 
